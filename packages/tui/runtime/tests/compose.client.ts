@@ -37,13 +37,15 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader, { type EntryTree } from '@deepseek-ai/cordis-plugin-loader'
 import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 
-const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
-const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
+/** Repository root, for locating shipped patch files and package.json anchors from any temp-world test. */
+export const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url))
+/** The shipped `dsh-base` bundle patch file, parsed the same way {@link loadBasePatches} parses any other patch-list YAML file. */
+export const BASE_PATCH_PATH = join(REPO_ROOT, 'packages/bundle/base/cordis.patch.yml')
 /** Installation anchor whose dependency closure covers every dsh-base row (mirrors `scaffold.ts`'s `INSTALL_ANCHOR`). */
-const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
+export const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 
 /** Parse one Include patch-list YAML file (mirrors app-boot's `loadOverlayPatches`, without its Host-only import closure). */
-function loadBasePatches(path: string): PatchOptions[] {
+export function loadBasePatches(path: string): PatchOptions[] {
   const parsed: unknown = yaml.load(readFileSync(path, 'utf8'), { schema: entryListSchema })
   if (!Array.isArray(parsed)) throw new Error(`${path} must be a top-level YAML array of loader patch entries`)
   return parsed as PatchOptions[]
@@ -76,7 +78,7 @@ function packageDirFromAnchor(anchor: string, packageName: string): string | und
  * @param profilesDir - the temp world's profiles directory.
  * @param extraAnchors - additional package.json paths seeding the same BFS (their own name plus their dependency closure).
  */
-async function healProfilesModuleFallback(
+export async function healProfilesModuleFallback(
   installAnchor: string,
   profilesDir: string,
   extraAnchors: readonly string[] = [],

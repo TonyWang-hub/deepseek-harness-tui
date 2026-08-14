@@ -62,6 +62,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
   // inProcessHandler(), instead of leaving the client holding a stale
   // connected generation.
   private apiProxyGenerationSignal: AbortSignal | undefined
+  // Set once this row unloads. A client tree holds its inProcessHandler()
+  // reference for its whole life and has no way to observe the Host row going
+  // away, so the handler itself has to stop serving: after unload the channel
+  // and interceptor registries are empty, and every endpoint an interceptor
+  // used to claim would silently fall through to whatever ApiProxy the global
+  // service store still holds — the fence-exempt privileged surface included.
+  private unloaded = false
 
   /**
    * Provide the Host half over the active HTTP server.
@@ -70,11 +77,19 @@ export class HostConnectionService extends Service implements HostConnectionHand
    */
   constructor(ctx: Context, private readonly trustedHosts: readonly string[]) {
     super(ctx, 'connection')
+    ctx.effect(() => () => { this.unloaded = true }, 'client-connection: in-process handler lifecycle')
     ctx.inject(['apiProxy'], (apiCtx) => {
       const controller = new AbortController()
       this.apiProxyGenerationSignal = controller.signal
       apiCtx.effect(() => () => {
         controller.abort()
+        // Defensive: this one `ctx.inject(['apiProxy'], ...)` fiber (vendor
+        // cordis's Fiber._unload()/._reload(), keyed by the providing fiber's
+        // epoch) unloads a withdrawn generation and reloads a replacement
+        // strictly sequentially — the replacement's callback above cannot run
+        // until this teardown finishes — so `apiProxyGenerationSignal` is
+        // always still this generation's own signal here.
+        /* v8 ignore next -- unreachable under cordis's sequential unload-then-reload of one shared dependent fiber; see comment above. */
         if (this.apiProxyGenerationSignal === controller.signal) this.apiProxyGenerationSignal = undefined
       }, 'client-connection: in-process apiProxy generation lifecycle')
     })
@@ -120,6 +135,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
   inProcessHandler(): { fetch: typeof fetch } {
     return {
       fetch: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        if (this.unloaded) return new Response('not found', { status: 404 })
         const request = input instanceof Request ? input : new Request(input, init)
         const pathname = new URL(request.url).pathname
         const endpoint = endpointFromPath(API_PATH, pathname)
@@ -152,6 +168,24 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * generation's lifecycle, so a request dispatched to the ApiProxy fallback
    * aborts the moment that generation unloads — even a long-lived SSE stream
    * request that would otherwise never observe the withdrawal.
+   *
+   * `inProcessHandler().fetch` reads `apiProxy` itself through `ctx.get`, a
+   * direct and immediate service-store read, but `apiProxyGenerationSignal`
+   * is only set once the constructor's `ctx.inject(['apiProxy'], ...)`
+   * dependent fiber reloads — deferred behind at least one microtask by
+   * cordis (`vendor/cordis/src/fiber.ts` `_reload()`'s own
+   * `await Promise.resolve()`). A request whose dispatch lands inside that
+   * gap — the same synchronous tick as the `ctx.provide('apiProxy', ...)`
+   * call that composed the generation, with no await between them — sees
+   * `apiProxy` defined but no signal yet, and this method returns `request`
+   * unscoped rather than rejecting or waiting: a real caller can never
+   * observe this gap, because reaching `inProcessHandler()` at all — even
+   * in-process — already crosses this same async boundary at least once, so
+   * the caller's own dispatch cannot land in the composing fiber's
+   * synchronous tick. Reachable only from a test that calls
+   * `ctx.provide('apiProxy', ...)` and dispatches in the same tick (see
+   * `rpc-host-in-process.host.spec.ts`'s "dispatches through the ApiProxy
+   * fallback unscoped" case, which pins this exact window).
    * @param request - request about to be dispatched to `toFetchHandler(apiProxy)`.
    * @returns `request` unchanged while no apiProxy generation is tracked yet; otherwise a clone carrying the combined signal.
    */
@@ -183,7 +217,19 @@ export class HostConnectionService extends Service implements HostConnectionHand
       },
     }
     return owner.effect(() => {
-      const disposeRoute = owner.webServer.register(route)
+      // Same duplicate rule registerInterceptor keeps: without it the second
+      // registration silently replaces the first in `channels`, and the FIRST
+      // disposer then deletes the SECOND's live handler, 404-ing a channel
+      // whose owner is still mounted.
+      if (this.channels.has(channel)) {
+        throw new Error(`connection: RPC channel ${JSON.stringify(channel)} is already registered`)
+      }
+      // The HTTP carrier is optional, exactly as in apply(): a terminal
+      // composition mounts no webServer, and this registry must still accept
+      // channels there. Read through ctx.get, never the `owner.webServer`
+      // property proxy, which is undefined in that composition.
+      const webServer = owner.get('webServer')
+      const disposeRoute = webServer?.register(route)
       // Registered into the same in-process registry inProcessHandler() reads,
       // so a channel reachable over the network route above is also reachable
       // in-process (requirement: a channel serving the web face cannot 404 in
@@ -191,7 +237,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
       this.channels.set(channel, fetchHandler)
       return () => {
         this.channels.delete(channel)
-        return disposeRoute()
+        return disposeRoute?.()
       }
     }, `client-connection: ${channel} rpc channel`)
   }

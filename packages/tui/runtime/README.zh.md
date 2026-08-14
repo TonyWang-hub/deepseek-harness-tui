@@ -43,3 +43,4 @@ interface TuiRuntimeHandle {
 
 - **尚无渲染器** ——本包只交付双 Context 引导；`packages/tui/ink-ui`（渲染、输入、实时区域）与 `packages/bundle/tui-app`（发行的 `dsh --profile tui` 组合）是同一落地顺序计划里的后续几刀。
 - **`ctx.tuiRuntime.clientCtx` 是整个 Client `Context`，而不是更窄的门面** ——最终渲染器的具体需求尚未定型；在还没有第二个真实消费者之前收窄这个契约，只会是猜测。
+- **本包测试经每个 Client 包已构建的 `lib/client-node.js` 解析，而非其 `src`** ——`apply()` 按包名挂载 `@deepseek-ai/dsh-client-connection/client-node` 及其同类，Node 会把它解析到已构建的伴生产物。改了某个 Client 包的 `src` 后若不先跑 `pnpm run build:lib:client` 就跑本包测试，跑的是陈旧产物，不是刚改的代码。

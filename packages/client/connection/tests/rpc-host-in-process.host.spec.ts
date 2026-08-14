@@ -298,6 +298,33 @@ describe('HostConnectionService.inProcessHandler generation lifecycle', () => {
 
     await apiProxyFiber.dispose()
     await connectionFiber.dispose()
+  }, 30_000)
+
+  it('dispatches through the ApiProxy fallback unscoped the instant it is composed, before its generation signal binds', async () => {
+    // `ctx.get('apiProxy')` is a direct, synchronous service-store read, but
+    // `apiProxyGenerationSignal` is only set once the constructor's
+    // `ctx.inject(['apiProxy'], ...)` dependent fiber reloads — gated behind
+    // at least one microtask by cordis (vendor/cordis/src/fiber.ts
+    // `_reload()`'s `await Promise.resolve()`). Providing `apiProxy` and
+    // dispatching in the same synchronous tick (no intervening await) lands
+    // inside that gap: `scopedToApiProxyGeneration` sees no tracked signal
+    // yet and must still dispatch — unscoped rather than throwing or hanging.
+    const ctx = new Context()
+    const connectionFiber = ctx.plugin({ inject: [...inject], apply })
+    await connectionFiber.await()
+    const connection = ctx.get('connection') as HostConnectionHandle
+    const handler = connection.inProcessHandler()
+
+    ctx.provide('apiProxy', stubApiProxy())
+    const response = await handler.fetch('http://dsh.internal/api/session.list', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: 'r-early', method: 'session.list', payload: {} }),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ result: { ok: true, value: { items: [] } } })
+
+    await connectionFiber.dispose()
   })
 })
 
@@ -330,6 +357,25 @@ describe('HostConnectionService.inProcessHandler generic channels', () => {
       body: JSON.stringify(body),
     })
     expect(afterRemoval.status).toBe(404)
+    await dispose()
+  })
+
+  it('404s a path that matches no registered channel while another channel is still registered', async () => {
+    const { connection, dispose } = await mounted()
+    // Keep one channel registered so the generic-channel scan below actually
+    // walks a non-empty registry and evaluates its match condition against an
+    // entry that does not match, instead of short-circuiting on an empty map.
+    const remove = connection.rpc.handle('/tui-rpc', async () => ({ ok: true, value: {} }), { authority: 'loopback' })
+    const handler = connection.inProcessHandler()
+
+    const response = await handler.fetch('http://dsh.internal/other-channel/create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: 'r-nomatch', method: 'create', payload: {} }),
+    })
+    expect(response.status).toBe(404)
+
+    await remove()
     await dispose()
   })
 })

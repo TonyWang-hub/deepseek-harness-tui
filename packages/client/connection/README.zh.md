@@ -8,7 +8,7 @@
 
 `HostConnectionService.inProcessHandler()` 是 `/api` HTTP 路由及所有 `rpc.handle()` channel 的同进程对应物，整条链路不含任何 `isTrustedApiRequest` 检查（同进程调用方已经持有活的 `HostConnectionHandle` 引用，严格处于该 fence 为跨 socket 请求建立的信任域内部，而它从不跨越任何 socket）。经 `rpc.handle()` 注册的每个泛型 channel 都可经它触达，走的是与网络路由相同的注册表分发，因此服务 web 面的 channel 不会在进程内载体上 404。ApiProxy 回退按 generation 持有：经它分发的请求携带由调用方自身信号与当前组合的 ApiProxy fiber 生命周期合成的信号，因此撤销或重组 ApiProxy（HMR，或单纯的进程内重组）会中止已经经回退分发出去的每一条流——包括长活的 `events.mux`/`events.host` 请求——而不是让调用方抱着一个永远观察不到丢失的陈旧 connected generation。进程内客户端调用方（`createInProcessConnectionRpc`）保持与 `InProcessApiClient.doFetch` 相同的中止契约：已中止的信号立即拒绝，调用中途触发的信号与无视它的 handler 竞速拒绝，因此注入的传输不可能让调用永久 pending。
 
-连接注册表与 `inProcessHandler()` 不需要 `webServer`：`apply` 自己的 `inject` 不声明硬依赖，HTTP/WebSocket 载体（`/api` 路由加两条下行 upgrade）只在 `webServer` 真正组合后才挂载，与本就可选的 ApiProxy 回退完全同构。纯终端组合激活本插件即得到可用的进程内注册表且不监听任何 socket；挂载了 `webServer` 的组合行为与拆分前逐位一致。
+连接注册表与 `inProcessHandler()` 不需要 `webServer`：`apply` 自己的 `inject` 不声明硬依赖，HTTP/WebSocket 载体（`/api` 路由加两条下行 upgrade）只在 `webServer` 真正组合后才挂载，与本就可选的 ApiProxy 回退完全同构。纯终端组合激活本插件即得到可用的进程内注册表且不监听任何 socket；挂载了 `webServer` 的组合行为与拆分前逐位一致。因此 `rpc.handle()` 只在存在 `webServer` 时注册网络路由，并由注册表自身持有"每个 channel 只能注册一次"这条规则——该规则此前只以 HTTP 路由表自己的重复拒绝形式体现，而终端组合根本触达不到它。被长期持有的 `inProcessHandler()` 引用在本行卸载后即停止服务，返回 404（与未组合 ApiProxy 时一致）：此时它的 channel 与 interceptor 注册表都已清空，继续服务只会让每个本应被 interceptor 认领的 endpoint 静默落到服务存储中残留的任意 ApiProxy 上。
 
 ## /api 浏览器信任栅栏
 
@@ -30,3 +30,6 @@ node 半侧在桥接或 upgrade 前守卫 `/api` 下的每个入口（`src/api-r
 
 - **History 会恢复未附加的会话**：打开 history 可能创建宿主侧 agent，并增加首次打开的延迟；没有仅从持久化读取的路径。
 - **`/api` 桥把每个请求体整体缓冲在内存里**：`maxRequestBodyBytes`（默认 160 MiB，按默认 100 MiB 图片总量上限经 base64 膨胀加信封余量得出）因此同时是单请求的驻留内存上界；要降低它而不缩小图片限额，需要流式请求体路径。
+- **进程内 SSE 的 body reader 没有自己的 deadline**：`InProcessApiClient.doFetch` 的中止竞速只覆盖请求腿；响应头一到，进度就交给了 body reader，一个既不关闭也不监视调用方信号的 body 会让该次迭代永远停在那里。目前没有任何已发布的载体会产出这样的 body（`toFetchHandler` 的 SSE 编解码正是用同一个请求信号中止），因此这里是钉住而非修复——见 `in-process-abort.client.spec.ts` 的 "parks on the body reader" 用例。
+- **`rpc.handle()` 不会为已注册的 channel 追加网络路由**：`register()` 只在注册那一刻读一次 `webServer`；在 `webServer` 组合之前注册的 channel，此后即便 `webServer` 才组合上，也终生只在进程内可达。进程内可达性（`inProcessHandler()`）不受影响。
+- **对 vendored 版 cordis `Fiber.dispose()` 二次调用会返回 `undefined` 而非 `Promise`**：对它 await 是安全的（await 一个非 Promise 值会立即 resolve），但对它链式调用 `.then()` 会抛出。可能对同一个 connection 或 generation fiber 调用两次 dispose 的代码，必须始终用 `await`，不能用 `.then()`。

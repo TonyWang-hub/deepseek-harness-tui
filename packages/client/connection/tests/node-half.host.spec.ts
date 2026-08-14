@@ -250,9 +250,13 @@ describe('connection node half', () => {
       payload: { args: { agentId: 'agent-1' } },
     }])
 
+    // The registry owns this rule now, not the HTTP route table: it previously
+    // surfaced only as the webServer's own `duplicate route`, which a terminal
+    // composition (no webServer at all) never gets — see
+    // rpc-host-carrier-races.host.spec.ts.
     expect(() => connection.rpc.handle('/rpc', async () => ({ ok: true, value: null }), {
       authority: 'trusted-host',
-    })).toThrow(/duplicate route/)
+    })).toThrow(/RPC channel "\/rpc" is already registered/)
     await remove()
     expect(routes.map(candidate => candidate.path)).toEqual([API_PATH])
     await fiber.dispose()

@@ -62,6 +62,8 @@ export class ConnectionController {
   private generation = 0
   private attempt = 0
   private current: AbortController | null = null
+  /** Cancels the backoff sleep between generations, so stop() leaves no armed timer behind. */
+  private idle: AbortController | null = null
   private running = false
   private lastState: ConnectionState | null = null
   private readonly config: Required<ConnectionConfig>
@@ -81,11 +83,19 @@ export class ConnectionController {
     void this.loop()
   }
 
-  /** Stop the loop and abort the current generation's streams. */
+  /**
+   * Stop the loop, abort the current generation's streams, and cancel a
+   * backoff sleep in progress. A host embedding this controller in-process
+   * (the terminal application) exits when the event loop drains, so an
+   * un-cancelled backoff timer would hold the process open for up to
+   * `backoffMaxMs` after teardown.
+   */
   stop(): void {
     this.running = false
     this.current?.abort()
     this.current = null
+    this.idle?.abort()
+    this.idle = null
   }
 
   private backoffDelay(attempt: number): number {
@@ -135,12 +145,23 @@ export class ConnectionController {
         // only then may onConnected fire, so the resync it triggers cannot outrun the
         // subscribed baseline. The timeout guards against a carrier that never fires onOpen
         // (see ConnectionConfig.streamOpenTimeoutMs).
-        const timeout = new AbortController()
-        const [description] = await Promise.all([
-          this.api.host.describe({}),
-          Promise.race([streamsOpen, sleep(this.config.streamOpenTimeoutMs, timeout.signal)]),
-        ])
-        timeout.abort()
+        // `finally`, not a straight-line call: host.describe rejecting (an
+        // unreachable or withdrawn host) settles the Promise.all before the
+        // race resolves, so aborting only on the success path leaves one armed
+        // streamOpenTimeoutMs timer per failed generation — a reconnect storm's
+        // worth of them, each holding the event loop open for a host that exits
+        // when it drains.
+        const [description] = await (async () => {
+          const timeout = new AbortController()
+          try {
+            return await Promise.all([
+              this.api.host.describe({}),
+              Promise.race([streamsOpen, sleep(this.config.streamOpenTimeoutMs, timeout.signal)]),
+            ])
+          } finally {
+            timeout.abort()
+          }
+        })()
         const descriptionResult = description.result
         if (!descriptionResult.ok) {
           throw new Error(`host.describe failed: ${descriptionResult.error.code}: ${descriptionResult.error.message}`)
@@ -163,8 +184,9 @@ export class ConnectionController {
       this.emitState('reconnecting')
       this.attempt += 1
       console.warn(`[web-runtime] connection lost, retry #${this.attempt}`)
-      const idle = new AbortController()
-      await sleep(this.backoffDelay(this.attempt), idle.signal)
+      this.idle = new AbortController()
+      await sleep(this.backoffDelay(this.attempt), this.idle.signal)
+      this.idle = null
     }
   }
 

@@ -91,7 +91,9 @@ declare module '@deepseek-ai/cordis' {
  * provide it as `ctx.tuiRuntime`. The Client tree's lifecycle is an effect of
  * this plugin's fiber: disposing the Host row (unmount, HMR reload, test
  * teardown) disposes the Client tree with it — never the reverse, and never
- * independently.
+ * independently. If the Host row instead disposes while one of the mount
+ * awaits below is still settling, this function disposes the Client tree
+ * itself before returning (see the `INACTIVE_EFFECT` handling inline).
  * @param ctx - Host plugin context; `inject` guarantees `ctx.connection` already exists.
  */
 export async function apply(ctx: HostContext): Promise<void> {
@@ -111,10 +113,32 @@ export async function apply(ctx: HostContext): Promise<void> {
   const disposeCommandsRemote = await clientCtx.remote.$mount(commandsRemote)
   await clientCtx.plugin(runtimeClient)
 
-  ctx.effect(() => () => {
-    void disposeCommandsRemote()
-    void clientCtx.fiber.dispose()
-  }, 'tui-runtime: client tree lifecycle')
+  try {
+    ctx.effect(() => () => {
+      void disposeCommandsRemote()
+      void clientCtx.fiber.dispose()
+    }, 'tui-runtime: client tree lifecycle')
+  } catch (error) {
+    // `ctx.effect()` above is the only place that will ever dispose the
+    // Client tree just built — if it throws for any reason, that tree would
+    // otherwise never be disposed by anything, a silent leak of its
+    // connect/pump/reconnect loop. Tear it down here regardless of why the
+    // registration failed, then decide whether the failure itself is
+    // expected teardown or a genuine error.
+    await disposeCommandsRemote()
+    await clientCtx.fiber.dispose()
+    // The Host row's own fiber can start (or finish) unloading during any of
+    // the awaits above — an HMR reload or process shutdown racing this
+    // mount. `ctx.effect()` then throws `CordisError('INACTIVE_EFFECT')`
+    // (see vendor/cordis/src/fiber.ts `assertActive()`/`effect()`) because
+    // there is no longer an active fiber to attach cleanup to. The Host row
+    // disposing mid-mount is the app tearing down exactly as asked, not a
+    // mount failure, so this case settles quietly and returns rather than
+    // throwing (same rationale as `watchUserPatches` in dsh-app-boot). Any
+    // other error is genuinely unexpected and propagates.
+    if ((error as { code?: string } | null)?.code === 'INACTIVE_EFFECT') return
+    throw error
+  }
 
   ctx.provide('tuiRuntime', { clientCtx })
 }
