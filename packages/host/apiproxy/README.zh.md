@@ -64,7 +64,7 @@ Workspace 列表与 Session 列表是相互独立的重连基线。`workspace.cr
 
 `AbstractApiClient` 持有全部协议不变量：签发 rpcId、包装／解包信封、Zod 解析、SSE 帧解码、一元请求超时，以及按微任务批处理的信封观测（`subscribeEnvelopes`）；平台子类只提供 `doFetch` 传输环节。`InProcessApiClient` 以 `toFetchHandler(api)` 为基础，仍是同构接点：它运行完整的协议序列化与校验路径而不经过网络，供需要该路径的调用方和载体测试使用。产品的 `dsh --profile headless` 是直连 core 的入口，不挂载本包。
 
-`toFetchHandler` 另经独立于包根的 `./handler` 子路径（`src/fetch/handler.ts`）发布：其 import 闭包不携带任何 `declare module '@deepseek-ai/cordis'` 合并，因此只 import `./handler` 的消费者不会把本包自己的 host `Context` 合并（`src/index.ts` 里的 `ctx.apiProxy`）拖进自己的 TypeScript 程序。在同一进程里组装第二个对 cordis 合并敏感的聚合的消费者（`dsh-client-connection` 的进程内载体是第一个），一律从 `./handler` 而非包根 import `toFetchHandler`。
+`toFetchHandler` 另经独立于包根的 `./handler` 子路径（`src/fetch/handler.ts`）发布：其 import 闭包不携带任何 `declare module '@deepseek-ai/cordis'` 合并，因此只 import `./handler` 的消费者不会把本包自己的 host `Context` 合并（`src/index.ts` 里的 `ctx.apiProxy`）拖进自己的 TypeScript 程序。在同一进程里组装第二个对 cordis 合并敏感的聚合的消费者（`dsh-client-connection` 的进程内载体是第一个），一律从 `./handler` 而非包根 import `toFetchHandler`。`packages/client/connection/tests/in-process-connection.client.spec.ts` 是该子路径当前唯一的消费者，把它当作进程内集成测试来用；生产消费者要等到终端应用把这个进程内载体组合进真实 host 树才会出现。
 
 ## 模型体验
 

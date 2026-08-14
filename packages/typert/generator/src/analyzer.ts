@@ -2641,13 +2641,21 @@ function hostExportSubpaths(manifest: Record<string, unknown>): string[] {
     .map(([subpath]) => subpath)
     .filter(subpath => subpath !== './client'
       && !subpath.startsWith('./client/')
+      // Node ESM companion of the browser client half (see dsh-*/tsdown.client.ts's
+      // clientNodeCompanion): its "types" target resolves to the same
+      // src/client/index.ts as ./client, a source file the Host-face program
+      // never includes (packages/client/*/src/** is Host-excluded) — analyzing
+      // it under 'host' throws "resolves to missing source" in collectExports.
+      && subpath !== './client-node'
       && subpath !== './remote')
 }
 
 function clientExportSubpaths(manifest: Record<string, unknown>): string[] {
   return packageExportTargets(manifest)
     .map(([subpath]) => subpath)
-    .filter(subpath => subpath === './client' || subpath.startsWith('./client/'))
+    .filter(subpath => subpath === './client'
+      || subpath.startsWith('./client/')
+      || subpath === './client-node')
 }
 
 function packageExportTargets(manifest: Record<string, unknown>): [string, string][] {

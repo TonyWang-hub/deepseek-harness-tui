@@ -24,6 +24,9 @@
       "path": "../../api/gateway/tsconfig.client.json"
     },
     {
+      "path": "../../interaction/commands"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]

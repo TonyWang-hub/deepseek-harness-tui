@@ -23,6 +23,10 @@
     "packages/*/*/tests/**/*.client.spec.tsx",
     "packages/*/*/tests/**/*.client.tsx",
     "packages/*/*/tests/**/*.client.ts",
+    // Imports its sibling `compose.client.ts` plus Client-half package
+    // subpaths directly (see its own module doc) — a Client aggregate file
+    // despite the `.e2e.ts` suffix the naming convention above does not cover.
+    "packages/tui/runtime/tests/real-model-smoke.e2e.ts",
     // Client package outside packages/client with a local CSS module face.
     "packages/extensions/ui-cordis/src/css-modules.d.ts",
     "packages/client/tsdown.client.ts",

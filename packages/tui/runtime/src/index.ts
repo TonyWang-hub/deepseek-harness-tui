@@ -114,9 +114,14 @@ export async function apply(ctx: HostContext): Promise<void> {
   await clientCtx.plugin(runtimeClient)
 
   try {
-    ctx.effect(() => () => {
-      void disposeCommandsRemote()
-      void clientCtx.fiber.dispose()
+    ctx.effect(() => async () => {
+      // Cordis awaits an async disposer during unload (see
+      // vendor/cordis/src/fiber.ts's `Disposable` doc), so returning here
+      // instead of firing both calls with `void` lets a rejection from
+      // either propagate to the unload caller instead of escaping as an
+      // unhandled rejection.
+      await disposeCommandsRemote()
+      await clientCtx.fiber.dispose()
     }, 'tui-runtime: client tree lifecycle')
   } catch (error) {
     // `ctx.effect()` above is the only place that will ever dispose the
