@@ -59,6 +59,11 @@
     { "path": "./packages/api/gateway/tsconfig.client.json" },
     { "path": "./packages/api/remotes/tsconfig.client.json" },
     { "path": "./packages/client/runtime" },
+    // Terminal application dual-context bootstrap: a Host-merge-free plugin
+    // (see its own module doc) that mounts the Client halves of connection,
+    // the Typert registry, and the Typert Remote through their /client-node
+    // Node ESM companions.
+    { "path": "./packages/tui/runtime" },
     { "path": "./packages/extensions/cordis-client-runner" },
     { "path": "./packages/extensions/ui-cordis" },
     { "path": "./packages/test-support/client-runtime" },
