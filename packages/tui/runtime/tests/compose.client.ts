@@ -151,10 +151,19 @@ export interface LlmReplayOptions {
  * top-level, exactly as `dsh-base`'s own comments describe for "the TUI,
  * which is single-session and composes its agent process-wide"), and this
  * package's own row.
- * @param options - an optional scripted LLM turn for a scenario that prompts a session.
+ * @param options - an optional scripted LLM turn for a scenario that prompts a session, or
+ * `realModel: true` for a real-API e2e scenario that keeps `dsh-base`'s own `llm-deepseek`
+ * row mounted instead (its shipped config resolves `DEEPSEEK_API_KEY` from the credential
+ * seam, then the environment — nothing here mounts a literal key). Mutually exclusive with
+ * `llmReplay`.
  * @returns the booted tree.
  */
-export async function bootHostTree(options: { llmReplay?: LlmReplayOptions } = {}): Promise<ComposedTree> {
+export async function bootHostTree(
+  options: { llmReplay?: LlmReplayOptions; realModel?: boolean } = {},
+): Promise<ComposedTree> {
+  if (options.llmReplay !== undefined && options.realModel === true) {
+    throw new Error('bootHostTree: llmReplay and realModel are mutually exclusive')
+  }
   const workspaceCwd = await realpath(await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-ws-')))
   const persistenceRoot = await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-sessions-'))
   const storageRoot = await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-storage-'))
@@ -173,7 +182,10 @@ export async function bootHostTree(options: { llmReplay?: LlmReplayOptions } = {
     // the scripted replay cursor (the same reason apps/web/tests/scaffold.ts
     // disables this row for every keyless scenario).
     { id: 'session-title-llm', disabled: true },
-    { id: 'llm-deepseek', disabled: true },
+    // Every scripted (keyless) scenario disables dsh-base's own live-model
+    // route; a real-model scenario leaves it mounted so the composition talks
+    // to the real DeepSeek API instead of the in-tree llm-replay route below.
+    ...options.realModel === true ? [] : [{ id: 'llm-deepseek', disabled: true }],
     { id: 'settings', config: { dshHome: harnessHome } },
     { id: 'credentials', config: { dshHome: harnessHome } },
     // Read-only forces every bash call through the sandbox escalation path,
