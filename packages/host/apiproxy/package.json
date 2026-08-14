@@ -35,6 +35,10 @@
     "./client": {
       "types": "./lib/types/fetch/client.d.ts",
       "default": "./lib/types/fetch/client.js"
+    },
+    "./handler": {
+      "types": "./lib/types/fetch/handler.d.ts",
+      "default": "./lib/types/fetch/handler.js"
     }
   },
   "files": [

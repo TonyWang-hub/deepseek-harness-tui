@@ -11,6 +11,14 @@ import {
   type RpcId as RpcIdType,
   type ServerResponse as RpcServerResponse,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
+// Full-package import (not the /api subpath): toFetchHandler is the ApiProxy
+// fallback this same-process handler dispatches to. Host-only file — no
+// browser-bundle concern the client half's api.ts comment warns about. A
+// client-aggregate consumer of the same function (e.g. the in-process
+// integration test) imports the merge-free `./handler` subpath instead,
+// which carries no `declare module '@deepseek-ai/cordis'` merge in its
+// import closure — the package root, imported below, deliberately does.
+import { toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
 import { bridge, type FetchHandler } from './http-bridge.ts'
 import { isTrustedApiRequest } from './api-request-trust.ts'
 import { API_PATH } from './api-path.ts'
@@ -42,6 +50,18 @@ declare module '@deepseek-ai/cordis' {
 /** Host Connection service whose channel registrations belong to the caller fiber. */
 export class HostConnectionService extends Service implements HostConnectionHandle {
   private readonly interceptors = new Map<string, ConnectionRpcInterceptor>()
+  // Generic rpc.handle() channels, keyed by channel prefix: the same registry
+  // the network route (register(), below) dispatches through, so a channel
+  // reachable from the browser cannot 404 in-process.
+  private readonly channels = new Map<string, FetchHandler>()
+  // Abort signal for the apiProxy fiber currently composed, or undefined
+  // while none is. Rebound on every (re)composition and aborted when that
+  // exact fiber unloads (see the ctx.inject() below) — this is what makes
+  // in-process streams generation-owned: a withdrawn or recomposed ApiProxy
+  // aborts every stream dispatched to its fallback through
+  // inProcessHandler(), instead of leaving the client holding a stale
+  // connected generation.
+  private apiProxyGenerationSignal: AbortSignal | undefined
 
   /**
    * Provide the Host half over the active HTTP server.
@@ -50,6 +70,14 @@ export class HostConnectionService extends Service implements HostConnectionHand
    */
   constructor(ctx: Context, private readonly trustedHosts: readonly string[]) {
     super(ctx, 'connection')
+    ctx.inject(['apiProxy'], (apiCtx) => {
+      const controller = new AbortController()
+      this.apiProxyGenerationSignal = controller.signal
+      apiCtx.effect(() => () => {
+        controller.abort()
+        if (this.apiProxyGenerationSignal === controller.signal) this.apiProxyGenerationSignal = undefined
+      }, 'client-connection: in-process apiProxy generation lifecycle')
+    })
   }
 
   /** Generic channel registry scoped to the Context reading this service. */
@@ -87,6 +115,52 @@ export class HostConnectionService extends Service implements HostConnectionHand
     }
   }
 
+  // Trust statement documented once, on the interface (HostConnectionHandle):
+  // this composition deliberately carries no isTrustedApiRequest check.
+  inProcessHandler(): { fetch: typeof fetch } {
+    return {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const request = input instanceof Request ? input : new Request(input, init)
+        const pathname = new URL(request.url).pathname
+        const endpoint = endpointFromPath(API_PATH, pathname)
+        const interceptor = this.interceptors.get(API_PATH)
+        if (endpoint !== undefined && interceptor !== undefined && interceptor.matches(endpoint)) {
+          return interceptor.fetchHandler.fetch(request)
+        }
+        if (endpoint !== undefined) {
+          const apiProxy = this.ctx.get('apiProxy')
+          if (apiProxy === undefined) return new Response('not found', { status: 404 })
+          return toFetchHandler(apiProxy).fetch(this.scopedToApiProxyGeneration(request))
+        }
+        // Generic rpc.handle() channels: the same registry the network route
+        // (register(), below) dispatches through, minus isTrustedApiRequest —
+        // the in-process fence exception documented on inProcessHandler above
+        // applies uniformly to every channel reachable through this handler,
+        // not only /api, so a channel serving the web face cannot 404 here.
+        for (const [channel, fetchHandler] of this.channels) {
+          if (pathname === channel || pathname.startsWith(`${channel}/`)) {
+            return fetchHandler.fetch(request)
+          }
+        }
+        return new Response('not found', { status: 404 })
+      },
+    }
+  }
+
+  /**
+   * Compose the caller's abort signal with the currently composed apiProxy
+   * generation's lifecycle, so a request dispatched to the ApiProxy fallback
+   * aborts the moment that generation unloads — even a long-lived SSE stream
+   * request that would otherwise never observe the withdrawal.
+   * @param request - request about to be dispatched to `toFetchHandler(apiProxy)`.
+   * @returns `request` unchanged while no apiProxy generation is tracked yet; otherwise a clone carrying the combined signal.
+   */
+  private scopedToApiProxyGeneration(request: Request): Request {
+    const generationSignal = this.apiProxyGenerationSignal
+    if (generationSignal === undefined) return request
+    return new Request(request, { signal: AbortSignal.any([request.signal, generationSignal]) })
+  }
+
   private register(
     owner: Context,
     channel: string,
@@ -108,10 +182,18 @@ export class HostConnectionService extends Service implements HostConnectionHand
         await bridge(req, res, fetchHandler)
       },
     }
-    return owner.effect(
-      () => owner.webServer.register(route),
-      `client-connection: ${channel} rpc channel`,
-    )
+    return owner.effect(() => {
+      const disposeRoute = owner.webServer.register(route)
+      // Registered into the same in-process registry inProcessHandler() reads,
+      // so a channel reachable over the network route above is also reachable
+      // in-process (requirement: a channel serving the web face cannot 404 in
+      // the terminal carrier).
+      this.channels.set(channel, fetchHandler)
+      return () => {
+        this.channels.delete(channel)
+        return disposeRoute()
+      }
+    }, `client-connection: ${channel} rpc channel`)
   }
 
   private registerInterceptor(

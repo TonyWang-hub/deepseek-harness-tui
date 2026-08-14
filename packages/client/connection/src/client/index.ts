@@ -1,16 +1,34 @@
 /**
- * Browser wire client. The plugin selects fixture or HTTP transport, provides
- * the shared API client, and lets the runtime object layer start the stream
- * controller with its sinks.
+ * Browser wire client. The plugin selects fixture, in-process, or HTTP
+ * transport, provides the shared API client, and lets the runtime object
+ * layer start the stream controller with its sinks.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { HostDescription, IApiClient } from './api.ts'
+import { InProcessApiClient } from './api.ts'
 import { ConnectionController, type ConnectionConfig, type ConnectionSinks, type ConnectionState } from './connection.ts'
 import { FixtureApiClient } from './fixture.ts'
 import { WebApiClient } from './web-api-client.ts'
 import { createWebConnectionRpc } from './rpc.ts'
+import { createInProcessConnectionRpc } from './rpc-in-process.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /**
+     * Injected in-process API transport (a host `HostConnectionHandle.inProcessHandler()`
+     * reference, or any equivalent fetch-shaped handler over the same-process
+     * `/api` surface). `apply()` reads it once: present, it builds
+     * `InProcessApiClient` and the in-process RPC caller over it in place of
+     * the browser `WebApiClient`/`createWebConnectionRpc()`; absent (every
+     * browser composition today) leaves that default entirely unchanged.
+     * Read via `ctx.get` — this Context member is not a declared injection of
+     * this plugin, so most compositions never provide it.
+     */
+    clientConnectionInProcessTransport: { fetch: typeof fetch }
+  }
+}
 
 // ---- Contract re-exports (browser-safe apiproxy channels + core types) ----
 export type {
@@ -33,6 +51,7 @@ export type {
 export {
   RpcId,
   AbstractApiClient,
+  InProcessApiClient,
   transportError,
 } from './api.ts'
 
@@ -58,7 +77,7 @@ export const inject: string[] = []
  * is ready — connection stays consumer-agnostic).
  */
 export interface ConnectionHandle {
-  /** Shared api client (fixture or real, decided at boot from the page URL). */
+  /** Shared api client (fixture, in-process, or browser HTTP/WebSocket — decided at boot; see `apply()`). */
   readonly api: IApiClient
   /** Whether the current page authority is loopback; non-browser contexts default to true. */
   readonly isLoopback: boolean
@@ -79,14 +98,23 @@ export interface ConnectionHandle {
 
 /**
  * Client plugin body: pick the api by page mode and provide ctx.connection.
+ * Selection order: the `?fixture` page switch first (browser-only demo
+ * data), then an injected `clientConnectionInProcessTransport` (a second
+ * in-process Context sharing this process with a Host tree), else the
+ * browser default. Only the fixture switch can fire in a browser page, and
+ * only the injected transport can fire outside one, so no composition
+ * observes a change here.
  * @param ctx - client cordis context.
  */
 export function apply(ctx: Context): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureClient = fixture ? new FixtureApiClient() : undefined
-  const api: IApiClient = fixtureClient ?? new WebApiClient()
-  const rpc = fixtureClient?.rpc ?? createWebConnectionRpc()
+  const inProcessTransport = ctx.get('clientConnectionInProcessTransport')
+  const api: IApiClient = fixtureClient
+    ?? (inProcessTransport !== undefined ? new InProcessApiClient(inProcessTransport) : new WebApiClient())
+  const rpc = fixtureClient?.rpc
+    ?? (inProcessTransport !== undefined ? createInProcessConnectionRpc(inProcessTransport) : createWebConnectionRpc())
   let started = false
   let description: HostDescription | undefined
   const descriptionListeners = new Set<() => void>()

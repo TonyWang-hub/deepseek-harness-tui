@@ -4,7 +4,7 @@
  */
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apply, type ConnectionHandle } from '../src/client/index.ts'
+import { apply, InProcessApiClient, type ConnectionHandle } from '../src/client/index.ts'
 import type { RpcMessage } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
 import { FixtureApiClient } from '../src/client/fixture.ts'
@@ -54,8 +54,9 @@ afterEach(() => {
   else globalThis.WebSocket = originalWebSocket
 })
 
-async function mount(): Promise<ConnectionHandle> {
+async function mount(setup?: (ctx: Context) => void): Promise<ConnectionHandle> {
   const ctx = new Context()
+  setup?.(ctx)
   await ctx.plugin({ apply, inject: [] })
   const handle = ctx.get('connection') as ConnectionHandle | undefined
   if (handle === undefined) throw new Error('ctx.connection not provided')
@@ -394,5 +395,111 @@ describe('connection client apply', () => {
     await expect(handle.rpc.call('/other', 'goals/create', {})).rejects.toThrow(/channel.*unavailable/)
     await expect(handle.rpc.call('/api', 'unknown/read', { args: { agentId: 'fx-alpha' } }))
       .rejects.toThrow(/endpoint.*unavailable/)
+  })
+})
+
+describe('connection client apply — injected in-process transport', () => {
+  /** Structural fetch-shaped stand-in for a host `inProcessHandler()` reference. */
+  function fakeTransport(impl: typeof globalThis.fetch): { fetch: typeof fetch } {
+    return { fetch: impl }
+  }
+
+  it('builds InProcessApiClient over the injected transport instead of WebApiClient', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    const handle = await mount((ctx) => {
+      ctx.provide('clientConnectionInProcessTransport', fakeTransport(() => Promise.resolve(new Response('{}'))))
+    })
+    expect(handle.api).toBeInstanceOf(InProcessApiClient)
+    expect(handle.isLoopback).toBe(true)
+  })
+
+  it('the ?fixture switch still wins over an injected in-process transport', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '?fixture' }
+    const handle = await mount((ctx) => {
+      ctx.provide('clientConnectionInProcessTransport', fakeTransport(() => Promise.resolve(new Response('{}'))))
+    })
+    expect(handle.api).toBeInstanceOf(FixtureApiClient)
+  })
+
+  it('routes unary calls, correlation, and transport failures through the injected handler, never globalThis.fetch', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    const seen: string[] = []
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const handle = await mount((ctx) => {
+      ctx.provide('clientConnectionInProcessTransport', fakeTransport((input) => {
+        seen.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+        return Promise.resolve(new Response('{}', { status: 200 }))
+      }))
+    })
+    try {
+      // Schema rejection is fine — the transport hop is the assertion.
+      await (handle.api as InProcessApiClient).host.describe({}).catch(() => undefined)
+    } finally {
+      fetchSpy.mockRestore()
+    }
+    expect(seen.some(u => u.includes('/api/host.describe'))).toBe(true)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('validates in-process generic RPC transport failures, correlation, and targets over the injected handler', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    let fetchImpl: typeof globalThis.fetch = () => Promise.resolve(new Response('unavailable', { status: 503 }))
+    const calls: [RequestInfo | URL, RequestInit | undefined][] = []
+    const handle = await mount((ctx) => {
+      ctx.provide('clientConnectionInProcessTransport', fakeTransport((input, init) => {
+        calls.push([input, init])
+        return fetchImpl(input, init)
+      }))
+    })
+    const abort = new AbortController()
+    await expect(handle.rpc.call('/api', 'goals/create', {}, abort.signal)).rejects.toThrow('HTTP 503')
+    expect(calls[0]?.[0]).toEqual(new URL('http://dsh.internal/api/goals/create'))
+    expect(calls[0]?.[1]).toMatchObject({ signal: abort.signal })
+
+    fetchImpl = () => Promise.resolve(Response.json({
+      type: 'server-response',
+      rpcId: 'different-rpc',
+      result: { ok: true, value: null },
+    }))
+    // Called with no signal this time: the injected handler receives no `signal` init property at all.
+    await expect(handle.rpc.call('/api', 'goals/create', {})).rejects.toThrow('rpcId mismatch')
+    expect(calls[1]?.[1]).not.toHaveProperty('signal')
+
+    for (const [channel, endpoint] of [
+      ['api2', 'goals/create'],
+      ['/api', ''],
+      ['/api', 'goals//create'],
+    ] as const) {
+      await expect(handle.rpc.call(channel, endpoint, {})).rejects.toThrow('invalid RPC target')
+    }
+  })
+
+  it('rejects on an aborted signal even when the injected handler never resolves — the same contract InProcessApiClient.doFetch keeps', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    const handle = await mount((ctx) => {
+      ctx.provide('clientConnectionInProcessTransport', fakeTransport(() => new Promise<Response>(() => {
+        // A handler that ignores its signal argument and never settles: the
+        // caller must not be able to hang forever waiting on it.
+      })))
+    })
+    const abort = new AbortController()
+    const pending = handle.rpc.call('/api', 'goals/create', {}, abort.signal)
+    abort.abort(new Error('caller cancelled'))
+    await expect(pending).rejects.toThrow('caller cancelled')
+  })
+
+  it('rejects immediately for a call made with an already-aborted signal, without ever reaching the handler', async () => {
+    ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    const calls: unknown[] = []
+    const handle = await mount((ctx) => {
+      ctx.provide('clientConnectionInProcessTransport', fakeTransport((input) => {
+        calls.push(input)
+        return Promise.resolve(new Response('{}'))
+      }))
+    })
+    const abort = new AbortController()
+    abort.abort(new Error('already gone'))
+    await expect(handle.rpc.call('/api', 'goals/create', {}, abort.signal)).rejects.toThrow('already gone')
+    expect(calls).toHaveLength(0)
   })
 })

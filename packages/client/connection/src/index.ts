@@ -43,8 +43,14 @@ function assertImageBodyCapacity(ctx: Context, maxRequestBodyBytes: number): voi
   }
 }
 
-/** Services required before providing Connection; API Proxy is an optional `/api` fallback. */
-export const inject = ['webServer']
+/**
+ * No hard-required services: the connection registry and `inProcessHandler()`
+ * stand alone (a pure terminal composition activates this plugin with no
+ * listening socket). The HTTP/WebSocket carrier and the ApiProxy fallback are
+ * both optional, declared with `ctx.inject()` from inside `apply()` instead of
+ * here, so each activates only once its own service is actually composed.
+ */
+export const inject: string[] = []
 
 /** Plugin config: the deployment's non-loopback serving authorities. */
 export interface ConnectionConfig {
@@ -135,62 +141,75 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
   // silently authorizing its hostname prefix at request time.
   for (const entry of trustedHosts) assertTrustedAuthority(entry)
   if (ctx.get('apiProxy') !== undefined) assertImageBodyCapacity(ctx, maxRequestBodyBytes)
+  // Transport-neutral half: the channel registry and inProcessHandler() stand
+  // on their own and need no webServer. A pure terminal composition mounts
+  // only this.
   const connection = new HostConnectionService(ctx, trustedHosts)
-  const fetchHandler = connection.createSharedFetchHandler(API_PATH, {
-    async fetch(request) {
-      const pathname = new URL(request.url).pathname
-      const method = pathname.startsWith(`${API_PATH}/`)
-        ? pathname.slice(API_PATH.length + 1)
-        : undefined
-      if (method !== undefined
-        && PRIVILEGED_METHODS.has(method)
-        && !isTrustedApiRequest(request, [])) {
-        return new Response('forbidden', { status: 403 })
-      }
-      if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
-        return new Response('upgrade required', {
-          status: 426,
-          headers: { connection: 'Upgrade', upgrade: 'websocket' },
-        })
-      }
-      const apiProxy = ctx.get('apiProxy')
-      if (apiProxy === undefined) return new Response('not found', { status: 404 })
-      return toFetchHandler(apiProxy).fetch(request)
-    },
-  })
-  const route: WebRoute = {
-    kind: 'prefix',
-    path: API_PATH,
-    handler: async (req, res) => {
-      if (!isTrustedApiRequest(req, trustedHosts)) {
-        res.writeHead(403)
-        res.end('forbidden')
-        return
-      }
-      await bridge(req, res, fetchHandler, maxRequestBodyBytes)
-    },
-  }
-  ctx.effect(() => ctx.webServer.register(route), 'client-connection: /api route')
-  ctx.inject(['apiProxy'], (apiCtx) => {
-    assertImageBodyCapacity(apiCtx, maxRequestBodyBytes)
-    const downlinks = new WebSocketDownlinks(apiCtx.apiProxy)
-    const registerDownlink = (
-      path: string,
-      handle: WebUpgradeRoute['handler'],
-    ): void => {
-      apiCtx.effect(() => apiCtx.webServer.registerUpgrade({
-        path,
-        handler: (req, socket, head) => {
-          if (!isTrustedApiRequest(req, trustedHosts)) {
-            rejectWebSocketUpgrade(socket)
-            return
-          }
-          return handle(req, socket, head)
-        },
-      }), `client-connection: ${path} WebSocket`)
+
+  // HTTP/WebSocket carrier: an optional adapter over the registry above,
+  // mounted only once webServer is actually composed (mirrors the apiProxy
+  // fallback's own optional ctx.inject() below). A composition with no
+  // webServer never runs this block and opens no listening socket; a
+  // composition that does mount webServer sees identical behavior to before
+  // this split, since ctx.inject() fires synchronously once its dependency is
+  // already present at apply() time.
+  ctx.inject(['webServer'], (webCtx) => {
+    const fetchHandler = connection.createSharedFetchHandler(API_PATH, {
+      async fetch(request) {
+        const pathname = new URL(request.url).pathname
+        const method = pathname.startsWith(`${API_PATH}/`)
+          ? pathname.slice(API_PATH.length + 1)
+          : undefined
+        if (method !== undefined
+          && PRIVILEGED_METHODS.has(method)
+          && !isTrustedApiRequest(request, [])) {
+          return new Response('forbidden', { status: 403 })
+        }
+        if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
+          return new Response('upgrade required', {
+            status: 426,
+            headers: { connection: 'Upgrade', upgrade: 'websocket' },
+          })
+        }
+        const apiProxy = webCtx.get('apiProxy')
+        if (apiProxy === undefined) return new Response('not found', { status: 404 })
+        return toFetchHandler(apiProxy).fetch(request)
+      },
+    })
+    const route: WebRoute = {
+      kind: 'prefix',
+      path: API_PATH,
+      handler: async (req, res) => {
+        if (!isTrustedApiRequest(req, trustedHosts)) {
+          res.writeHead(403)
+          res.end('forbidden')
+          return
+        }
+        await bridge(req, res, fetchHandler, maxRequestBodyBytes)
+      },
     }
-    apiCtx.effect(() => () => downlinks.close(), 'client-connection: WebSocket downlinks')
-    registerDownlink(MUX_EVENTS_PATH, (req, socket, head) => { downlinks.handleMux(req, socket, head) })
-    registerDownlink(HOST_EVENTS_PATH, (req, socket, head) => { downlinks.handleHost(req, socket, head) })
+    webCtx.effect(() => webCtx.webServer.register(route), 'client-connection: /api route')
+    webCtx.inject(['apiProxy'], (apiCtx) => {
+      assertImageBodyCapacity(apiCtx, maxRequestBodyBytes)
+      const downlinks = new WebSocketDownlinks(apiCtx.apiProxy)
+      const registerDownlink = (
+        path: string,
+        handle: WebUpgradeRoute['handler'],
+      ): void => {
+        apiCtx.effect(() => apiCtx.webServer.registerUpgrade({
+          path,
+          handler: (req, socket, head) => {
+            if (!isTrustedApiRequest(req, trustedHosts)) {
+              rejectWebSocketUpgrade(socket)
+              return
+            }
+            return handle(req, socket, head)
+          },
+        }), `client-connection: ${path} WebSocket`)
+      }
+      apiCtx.effect(() => () => downlinks.close(), 'client-connection: WebSocket downlinks')
+      registerDownlink(MUX_EVENTS_PATH, (req, socket, head) => { downlinks.handleMux(req, socket, head) })
+      registerDownlink(HOST_EVENTS_PATH, (req, socket, head) => { downlinks.handleHost(req, socket, head) })
+    })
   })
 }

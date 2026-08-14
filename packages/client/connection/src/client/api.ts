@@ -32,7 +32,10 @@ export {
   SESSION_SEARCH_RESULT_LIMIT,
   transportError,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
-export { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
+// InProcessApiClient rides the same browser-safe subpath as AbstractApiClient
+// (it is defined in the same fetch/client.ts): importing it here never drags
+// the host composition into a browser bundle, unlike the package root.
+export { AbstractApiClient, InProcessApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
 export type { IApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
 export type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session/types'
 export type { MessageId } from '@deepseek-ai/dsh-llm/brand'
