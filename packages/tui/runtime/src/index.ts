@@ -1,8 +1,8 @@
 /**
  * `@deepseek-ai/dsh-tui-runtime` — the terminal application's dual-context
  * bootstrap: mounts a second, in-process Client cordis Context wired to the
- * Host tree's Connection in-process transport, and publishes it as
- * `ctx.tuiRuntime` for a terminal renderer (a later package) to consume.
+ * Host tree's Connection in-process transport, publishes it as
+ * `ctx.tuiRuntime`, and mounts the terminal renderer on a real TTY.
  *
  * One Node process hosts two root cordis Contexts because `connection`,
  * `sessions`, and `loader` are Host and Client services under the same keys
@@ -131,13 +131,9 @@ export const Config: z<Config> = z.object({
  */
 export interface TuiRuntimeHandle {
   /**
-   * The bootstrapped Client-tree root Context. A terminal renderer (a later
-   * package) reads its services (`ctx.sessions`, `ctx.workspaces`,
-   * `ctx.connection`) directly; this package publishes the whole Context
-   * rather than a narrower re-exported surface, because its consumer's exact
-   * needs are not yet fixed (this cut ships no renderer) and re-deriving a
-   * narrower facade ahead of a real second consumer would guess at a contract
-   * this package cannot yet justify.
+   * The bootstrapped Client-tree root Context. The mounted terminal renderer
+   * reads its services (`ctx.sessions`, `ctx.connection`) directly. This package publishes the whole Context because no narrower
+   * stable facade is defined for the in-process Client composition.
    */
   readonly clientCtx: Context
   /**

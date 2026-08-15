@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Dual-context bootstrap for the terminal application: mounts a second, in-process Client cordis `Context` over the Host tree's Connection in-process transport, and publishes it as `ctx.tuiRuntime` for a terminal renderer (a later package) to consume. See the [official-terminal-application Agent Note](../../../.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md) for the landing-order plan this package's slice belongs to.
+Dual-context bootstrap for the terminal application: mounts an in-process Client cordis `Context` over the Host Connection transport, publishes it as `ctx.tuiRuntime`, and mounts the Ink renderer by default when `stdout` is a real TTY.
 
 ## Why two cordis Contexts in one process
 
@@ -15,9 +15,11 @@ Given `ctx.connection` (the Host half of `@deepseek-ai/dsh-client-connection`, p
 1. Builds a fresh Client `Context`.
 2. Provides `clientConnectionInProcessTransport` on it — `{ fetch }` from `ctx.connection.inProcessHandler().fetch`.
 3. Mounts, in order, the Client halves of Connection, the Typert registry, the Typert Remote, one generated Remote contribution (`@deepseek-ai/dsh-commands/remote`), and the Client Runtime object layer — through their `/client-node` Node ESM companions (plain Node ESM, no `window.__ModuleLoader__` wrapper), never their package roots.
-4. Provides the mounted Client `Context` as `ctx.tuiRuntime.clientCtx`.
+4. Registers the Node ESM conversation-node definitions that populate `ConversationSnapshot`.
+5. When `render` is true and `stdout` is a real TTY, mounts `mountTuiRenderer(clientCtx, options)`.
+6. Provides `{ clientCtx, renderer? }` as `ctx.tuiRuntime`.
 
-The Client tree's lifecycle is one effect of this plugin's fiber: disposing the Host row (unmount, HMR reload, process shutdown) disposes the Client tree with it, never independently.
+The renderer and Client tree share this plugin fiber's lifecycle; disposal tears down the renderer first, then the Client tree.
 
 ## Host-merge-free by design
 
@@ -27,13 +29,15 @@ This package never imports a Host-half package root (`@deepseek-ai/dsh-host-apip
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
+import type { MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
 
 interface TuiRuntimeHandle {
   readonly clientCtx: Context
+  readonly renderer?: MountedTuiRenderer
 }
 ```
 
-A later renderer package reads `clientCtx`'s services directly (`ctx.sessions`, `ctx.workspaces`, `ctx.connection`) — this package publishes the whole Client `Context` rather than a narrower facade, because no consumer exists yet to justify one.
+The shipped renderer reads `clientCtx` services directly; `renderer` identifies the TTY-mounted renderer and is absent for headless or non-TTY compositions.
 
 ## Config
 
@@ -67,6 +71,6 @@ The shards report measured values against the Agent Note's thresholds in a table
 
 ## Known Limitations and Deferred Work
 
-- **No renderer yet** — this package ships the dual-context bootstrap only; `packages/tui/ink-ui` (rendering, input, live region) and `packages/bundle/tui-app` (the shipped `dsh --profile tui` composition) are later cuts in the same landing-order plan.
-- **`ctx.tuiRuntime.clientCtx` is the whole Client `Context`, not a narrower facade** — the eventual renderer's exact needs are not yet fixed; narrowing ahead of a real second consumer would guess at a contract this package cannot yet justify.
+- **Renderer mounting requires a real TTY** — `render` defaults to true, but a piped or CI process leaves `renderer` undefined; the shipped TUI profile treats that as a misconfiguration and exits.
+- **`ctx.tuiRuntime.clientCtx` remains the whole Client `Context`** — the current renderer directly consumes its sessions and connection services; no narrower stable facade is defined.
 - **Tests resolve every Client package through its built `lib/client-node.js`** — `apply()` mounts `@deepseek-ai/dsh-client-connection/client-node` and its siblings by package specifier, which Node resolves to the built companion, never `src`. Editing a Client package's `src` and running this package's tests without first running `pnpm run build:lib:client` exercises the stale built output, not the edit.

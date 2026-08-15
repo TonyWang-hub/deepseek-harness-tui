@@ -31,11 +31,12 @@
 | 进程内载体：generation 持有的事件流、中止契约、泛型 channel 路由、webServer 可选 | ✅ 已交付——28 个对抗性回归测试，经真实 DeepSeek API 验证 |
 | 双 Context 终端运行时（`packages/tui/runtime`）：零 socket 启动、跨 host 重组重连、经 pending 载体完成 ask-user 与审批 | ✅ 已交付 |
 | 客户端核心的 Node ESM 发布面（`./client-node` companions） | ✅ 已交付 |
-| 终端渲染器（Ink）：scrollback 提交 + 有界活动区 | ✅ 已交付 |
+| 终端渲染器（Ink）：scrollback 提交、有界活动区与终端模拟器快照 lane | ✅ 已交付 |
 | 开箱即用的 `tui` profile（`dsh --profile tui`） | ✅ 已交付 |
-| `/history` 分页器、client runtime tail rebase、长会话性能门 | 🗺 路线图 |
+| 长会话性能测试工具：确定性 10 万事件语料、prompt-ready、input-to-echo 与 resident-state 分片 | ✅ 已交付 |
+| `/history` 分页器、client runtime tail rebase 与固定 runner 墙钟门槛 | 🗺 路线图 |
 
-设计记录见[终端应用 Agent Note](.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md)。
+已交付的渲染器与 profile 分别记录在[终端渲染器 MVP Agent Note](.agents/notes/implemented/feature/2026-08-15-tui-terminal-renderer-mvp.md)和 [TUI 应用 bundle 组合 Agent Note](.agents/notes/implemented/feature/2026-08-15-tui-app-bundle-composition.md)中。
 
 ## 快速开始（开发）
 

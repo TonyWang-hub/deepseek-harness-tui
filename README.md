@@ -31,11 +31,12 @@ Because the terminal consumes the shared TypeScript client core, capability pari
 | In-process carrier: generation-owned event streams, abort contract, generic channel routing, webServer optional | ✅ Shipped — 28 adversarial regression tests, proven against the real DeepSeek API |
 | Dual-context terminal runtime (`packages/tui/runtime`): zero-socket boot, reconnect across host recomposition, ask-user and approval through the pending carrier | ✅ Shipped |
 | Node ESM publication of the client core (`./client-node` companions) | ✅ Shipped |
-| Terminal renderer (Ink): scrollback commit plus bounded live region | ✅ Shipped |
+| Terminal renderer (Ink): scrollback commit, bounded live region, and terminal-emulator snapshot lane | ✅ Shipped |
 | `tui` profile out of the box (`dsh --profile tui`) | ✅ Shipped |
-| `/history` pager, client-runtime tail rebase, long-session performance gate | 🗺 Roadmap |
+| Long-session performance harness: deterministic 100k-event corpus, prompt-ready, input-to-echo, and resident-state shards | ✅ Shipped |
+| `/history` pager, client-runtime tail rebase, and pinned-runner wall-clock enforcement | 🗺 Roadmap |
 
-The design record lives in the [terminal-application Agent Note](.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md).
+The shipped renderer and profile are recorded in the [terminal renderer MVP Agent Note](.agents/notes/implemented/feature/2026-08-15-tui-terminal-renderer-mvp.md) and [TUI app bundle composition Agent Note](.agents/notes/implemented/feature/2026-08-15-tui-app-bundle-composition.md).
 
 ## Quickstart (development)
 

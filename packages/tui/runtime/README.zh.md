@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-终端应用的双 Context 引导：在 Host 树的 Connection 进程内传输之上挂载第二个进程内 Client cordis `Context`，并以 `ctx.tuiRuntime` 发布给终端渲染器（后续包）使用。落地顺序见[官方终端应用 Agent Note](../../../.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md)。
+终端应用的双 Context 引导：在 Host Connection 传输之上挂载进程内 Client cordis `Context`，以 `ctx.tuiRuntime` 发布，并在 `stdout` 为真实 TTY 时默认挂载 Ink 渲染器。
 
 ## 为什么一个进程里要有两个 cordis Context
 
@@ -15,9 +15,11 @@
 1. 新建一个 Client `Context`。
 2. 在其上 provide `clientConnectionInProcessTransport`——取自 `ctx.connection.inProcessHandler().fetch` 的 `{ fetch }`。
 3. 依次挂载 Connection、Typert 注册表、Typert Remote 的 Client 半区，一个生成的 Remote 贡献（`@deepseek-ai/dsh-commands/remote`），以及 Client Runtime 对象层——全部通过它们的 `/client-node` Node ESM 伴生产物（纯 Node ESM，不带 `window.__ModuleLoader__` 包装），绝不通过各自的包根。
-4. 把挂载好的 Client `Context` 以 `ctx.tuiRuntime.clientCtx` 的形式 provide 出去。
+4. 注册用于填充 `ConversationSnapshot` 的 Node ESM conversation-node 定义。
+5. 当 `render` 为 true 且 `stdout` 是真实 TTY 时，挂载 `mountTuiRenderer(clientCtx, options)`。
+6. 以 `ctx.tuiRuntime` 提供 `{ clientCtx, renderer? }`。
 
-Client 树的生命周期是本插件 fiber 的一个 effect：卸载 Host 行（卸载、HMR 重载、进程关闭）会一并释放 Client 树，绝不独立存在。
+渲染器与 Client 树共享本插件 fiber 的生命周期；释放时先卸载渲染器，再释放 Client 树。
 
 ## 设计上不触碰 Host 半区的类型合并
 
@@ -27,13 +29,15 @@ Client 树的生命周期是本插件 fiber 的一个 effect：卸载 Host 行�
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
+import type { MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
 
 interface TuiRuntimeHandle {
   readonly clientCtx: Context
+  readonly renderer?: MountedTuiRenderer
 }
 ```
 
-后续的渲染器包直接读取 `clientCtx` 的各项服务（`ctx.sessions`、`ctx.workspaces`、`ctx.connection`）——本包发布整个 Client `Context`，而不是一个更窄的门面，因为目前还没有真正的消费者能为收窄这个契约提供依据。
+已交付的渲染器直接读取 `clientCtx` 的服务；`renderer` 标识在 TTY 上挂载的渲染器，在 headless 或非 TTY 组合中不存在。
 
 ## 配置
 
@@ -67,6 +71,6 @@ pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config
 
 ## Known Limitations and Deferred Work
 
-- **尚无渲染器** ——本包只交付双 Context 引导；`packages/tui/ink-ui`（渲染、输入、实时区域）与 `packages/bundle/tui-app`（发行的 `dsh --profile tui` 组合）是同一落地顺序计划里的后续几刀。
-- **`ctx.tuiRuntime.clientCtx` 是整个 Client `Context`，而不是更窄的门面** ——最终渲染器的具体需求尚未定型；在还没有第二个真实消费者之前收窄这个契约，只会是猜测。
+- **挂载渲染器需要真实 TTY** —— `render` 默认为 true，但管道或 CI 进程会让 `renderer` 保持 undefined；已交付的 TUI profile 将其视为配置错误并退出。
+- **`ctx.tuiRuntime.clientCtx` 仍是整个 Client `Context`** ——当前渲染器直接消费其中的 sessions 与 connection 服务；目前没有定义更窄的稳定门面。
 - **本包测试经每个 Client 包已构建的 `lib/client-node.js` 解析，而非其 `src`** ——`apply()` 按包名挂载 `@deepseek-ai/dsh-client-connection/client-node` 及其同类，Node 会把它解析到已构建的伴生产物。改了某个 Client 包的 `src` 后若不先跑 `pnpm run build:lib:client` 就跑本包测试，跑的是陈旧产物，不是刚改的代码。
