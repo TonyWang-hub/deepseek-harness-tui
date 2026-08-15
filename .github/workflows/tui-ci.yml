@@ -1,0 +1,45 @@
+name: TUI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tui-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tui:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build library faces
+        run: |
+          pnpm run build:lib:host
+          pnpm run build:lib:client
+      - name: Typecheck both faces
+        run: |
+          pnpm exec tsc -b tsconfig.host.json
+          pnpm exec tsc -b tsconfig.client.json
+      - name: Lint the TUI surface
+        run: pnpm exec tsx scripts/run-oxlint.ts packages/tui packages/bundle/tui-app
+      - name: Unit and integration tests (TUI surface)
+        run: pnpm exec vitest run packages/tui packages/bundle/tui-app --maxWorkers=2
+      - name: Snapshot lane (keyless replay)
+        run: pnpm exec vitest run --config vitest.snapshot.config.ts packages/tui/ink-ui
+      - name: Carrier regression (connection + apiproxy)
+        run: pnpm exec vitest run packages/client/connection packages/host/apiproxy --maxWorkers=2

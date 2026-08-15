@@ -2,6 +2,8 @@
 
 [English](CONTRIBUTING.md) | 中文
 
+> **Fork 说明（DeepSeek Harness TUI）。** 与上游不同，本仓库**接受 issue 与 pull request**，范围是终端面——`packages/tui/*`、`packages/bundle/tui-app` 与进程内载体工作。涉及上游所有代码的改动请先开 issue 讨论：它们随上游同步存亡。本文档其余部分是上游项目的贡献指南，按导入原样保留。
+
 感谢你愿意为 DeepSeek Harness 作出贡献！
 
 我们深信开源社区的力量，这份信念从项目最初就塑造着 DeepSeek Harness。

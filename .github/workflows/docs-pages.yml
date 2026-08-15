@@ -1,18 +1,8 @@
 name: Deploy documentation
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - '.github/workflows/docs-pages.yml'
-      - 'docs/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'scripts/project-doc-site.ts'
-      - 'scripts/project-doc-site.spec.ts'
-      - 'website/**'
-  workflow_dispatch:
+  # Fork note: upstream-only lane; manual trigger only in this repository.
+  workflow_dispatch: {}
 
 concurrency:
   group: github-pages

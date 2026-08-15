@@ -2,6 +2,8 @@
 
 [English](README.md) | 中文
 
+[![TUI CI](https://github.com/TonyWang-hub/deepseek-harness-tui/actions/workflows/tui-ci.yml/badge.svg)](https://github.com/TonyWang-hub/deepseek-harness-tui/actions/workflows/tui-ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **DeepSeek Harness TUI** 是完整的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 智能体框架，外加一张进程内的终端脸：同一个 Node 进程、完整的插件运行时，以及一个消费 Web UI 同一套客户端核心的终端客户端——不重复实现任何协议，终端模式下不监听任何 socket。
 
 > **非官方社区产品。** 本项目与 DeepSeek 无隶属或背书关系。它跟踪上游 MIT 许可的 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)，并在其上承载终端工作。上游 harness 能做的一切本仓库原样可用——Web UI、headless 运行、ACP 与插件生态全部不变。

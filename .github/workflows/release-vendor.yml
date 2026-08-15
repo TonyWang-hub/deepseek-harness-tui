@@ -8,16 +8,8 @@
 name: Release (vendor)
 
 on:
-  pull_request:
-  push:
-    branches: [master]
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish the packed tarballs to npm. Must run from a vendor-* tag.
-        required: true
-        type: boolean
-        default: false
+  # Fork note: upstream-only lane; manual trigger only in this repository.
+  workflow_dispatch: {}
 
 permissions:
   contents: read

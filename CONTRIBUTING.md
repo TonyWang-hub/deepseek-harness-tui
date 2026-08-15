@@ -2,6 +2,8 @@
 
 English | [中文](CONTRIBUTING.zh.md)
 
+> **Fork note (DeepSeek Harness TUI).** Unlike upstream, this repository **accepts issues and pull requests** for the terminal surface — `packages/tui/*`, `packages/bundle/tui-app`, and the in-process carrier work. Changes to upstream-owned code are better raised as issues first: they live or die with the upstream sync. The rest of this document is the upstream project's contribution guide, kept as imported.
+
 Thank you for your interest in contributing to DeepSeek Harness!
 
 We deeply believe in the power of open source communities, and that belief has shaped this project from the very beginning.

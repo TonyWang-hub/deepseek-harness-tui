@@ -8,8 +8,8 @@
 name: Sandbox
 
 on:
-  push:
-    branches: [master]
+  # Fork note: upstream-only lane; manual trigger only in this repository.
+  workflow_dispatch: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

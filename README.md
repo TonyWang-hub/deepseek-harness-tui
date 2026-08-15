@@ -2,6 +2,8 @@
 
 English | [中文](README.zh.md)
 
+[![TUI CI](https://github.com/TonyWang-hub/deepseek-harness-tui/actions/workflows/tui-ci.yml/badge.svg)](https://github.com/TonyWang-hub/deepseek-harness-tui/actions/workflows/tui-ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **DeepSeek Harness TUI** is the full [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) agent harness plus an in-process terminal face: one Node process, the complete plugin runtime, and a terminal client that consumes the same client core the Web UI uses — no protocol re-implementation, and no listening socket in terminal mode.
 
 > **Unofficial community product.** This project is not affiliated with or endorsed by DeepSeek. It tracks the upstream MIT-licensed [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) and carries the terminal work on top. Everything the upstream harness does, this repository does — the Web UI, headless runs, ACP, and the plugin ecosystem all work unchanged.
