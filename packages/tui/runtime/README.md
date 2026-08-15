@@ -40,6 +40,31 @@ A later renderer package reads `clientCtx`'s services directly (`ctx.sessions`, 
 - `render` (default `true`) — mount the terminal renderer over the bootstrapped Client tree once ready, gated on a real TTY `stdout` (a piped/CI process or a test harness has no terminal to render into, so this plugin silently skips mounting rather than treating `render` as unset).
 - `resumeSessionId` (optional) — an existing session id to open instead of creating a fresh one (`dsh --profile tui --resume <sessionId>`). Passed to `mountTuiRenderer`'s `MountOptions.sessionId` unchanged, branded at that single point; `mountTuiRenderer`'s own MVP limitation still applies — nodes already in the session at mount time are the committed baseline and are never replayed into scrollback.
 
+## Performance gate
+
+`tests/perf/` holds the terminal application's performance gate: a deterministic synthetic long-session corpus generator plus four benchmark shards, outside the default test lane (`*.perf.client.ts`, not `*.spec.ts`) and run through their own config.
+
+```sh
+# One shard at a time — each boots a real host tree over a ~30 MB corpus.
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts corpus-generation
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts prompt-ready
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts input-to-echo
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts resident-state
+```
+
+| Shard | Measures | Agent Note threshold |
+|---|---|---|
+| `corpus-generation` | corpus size, shape, and byte-for-byte reproducibility | ≥100k events, deterministic |
+| `prompt-ready` | cold/warm time to a typable composer, plus the resume history load, against a fresh-session control | budgets stated per run |
+| `input-to-echo` | keystroke echo latency, 240 samples, p50/p95/p99 | p50 ≤20 ms, p95 ≤50 ms |
+| `resident-state` | steady-state RSS against a renderer-free headless baseline, Ink-tree height, and client retention | RSS delta cap, retained-event ceiling |
+
+The corpus (`corpus.client.ts`) is generated from a fixed seed — message ids, timestamps, and every shape decision are drawn from one seeded PRNG — so two generations produce identical bytes and a measured regression is a renderer regression, not a corpus difference. It is ~30 MB at the 100k-event target, so it is cached rather than committed: the first run writes it and the seeded persistence root beside it under `node_modules/.cache/dsh-tui-perf/` (override with `DSH_TUI_PERF_CORPUS_DIR`), and later runs reuse both. Delete that directory to force regeneration.
+
+The renderer mounts on controlled TTY streams, not a terminal emulator: every metric here is a property of what the renderer writes and when, and an emulator in the loop would add its own parse cost to each latency sample. Semantic terminal projection belongs to the snapshot lane.
+
+The shards report measured values against the Agent Note's thresholds in a table and assert only structural facts (a real corpus was resumed, the tail window bounded the client's retained events, the Ink tree held no history). Wall-clock enforcement belongs on a pinned CI runner, not on a developer machine.
+
 ## Known Limitations and Deferred Work
 
 - **No renderer yet** — this package ships the dual-context bootstrap only; `packages/tui/ink-ui` (rendering, input, live region) and `packages/bundle/tui-app` (the shipped `dsh --profile tui` composition) are later cuts in the same landing-order plan.

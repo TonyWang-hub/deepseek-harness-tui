@@ -1,0 +1,6 @@
+terminal 120x24 buffer=normal length=24 base=0 viewport=0
+frames synchronized=1
+cursor visible column=2 viewportRow=0 bufferRow=0
+viewport
+0| "❯"
+1-23| <blank>

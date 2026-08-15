@@ -40,6 +40,31 @@ interface TuiRuntimeHandle {
 - `render`（默认 `true`）——在 Client 树就绪后挂载终端渲染器，以真实 TTY `stdout` 为门槛（管道/CI 进程或测试环境没有终端可渲染，所以本插件在那种情况下悄悄跳过挂载，而不是把 `render` 当作未设置处理）。
 - `resumeSessionId`（可选）——打开一个既有会话而不是新建一个（`dsh --profile tui --resume <sessionId>`）。原样传给 `mountTuiRenderer` 的 `MountOptions.sessionId`，在这一个点上打上品牌；`mountTuiRenderer` 自身的 MVP 限制依旧成立——挂载时会话里已有的节点是已提交的基线，绝不会被回放进 scrollback。
 
+## 性能门
+
+`tests/perf/` 是终端应用的性能门：一个确定性的合成长会话语料生成器，加上四个基准分片。它们在默认测试 lane 之外（命名为 `*.perf.client.ts` 而非 `*.spec.ts`），通过自带的配置运行。
+
+```sh
+# One shard at a time — each boots a real host tree over a ~30 MB corpus.
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts corpus-generation
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts prompt-ready
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts input-to-echo
+pnpm exec vitest run --config packages/tui/runtime/tests/perf/vitest.perf.config.ts resident-state
+```
+
+| 分片 | 度量 | Agent Note 门槛 |
+|---|---|---|
+| `corpus-generation` | 语料规模、形态与逐字节可复现性 | ≥100k 事件，确定性 |
+| `prompt-ready` | 冷/热启动到 composer 可输入的耗时，以及 resume 载入历史的耗时，对照全新会话的控制组 | 每次运行如实报告 |
+| `input-to-echo` | 按键回显延迟，240 次采样，p50/p95/p99 | p50 ≤20 ms，p95 ≤50 ms |
+| `resident-state` | 稳态 RSS 与不挂渲染器的 headless 基线之差、Ink 树高度、client 侧驻留量 | RSS 增量上限、驻留事件上限 |
+
+语料（`corpus.client.ts`）由固定种子生成——消息 id、时间戳以及每一处形态决策都取自同一条带种子的伪随机流——因此两次生成的字节完全一致，测到的回归就是渲染器的回归，而不是语料差异。在 100k 事件目标下它约 30 MB，因此是缓存而非入库：首次运行把它连同已灌入语料的持久化根一起写到 `node_modules/.cache/dsh-tui-perf/`（可用 `DSH_TUI_PERF_CORPUS_DIR` 覆盖），之后的运行复用两者。删掉该目录即可强制重新生成。
+
+渲染器挂载在受控的 TTY 流上，而不是终端模拟器：这里的每一项指标都是"渲染器写了什么、何时写"的属性，而在链路里放一个模拟器只会把它自己的解析开销加进每一次延迟采样。语义化的终端投影属于快照 lane。
+
+各分片把实测值与 Agent Note 的门槛并列成表，只断言结构性事实（确实 resume 了真实语料、尾窗确实约束住了 client 侧驻留事件、Ink 树里没有历史）。以墙钟时间做强制门槛属于固定配置的 CI runner，不属于开发机。
+
 ## Known Limitations and Deferred Work
 
 - **尚无渲染器** ——本包只交付双 Context 引导；`packages/tui/ink-ui`（渲染、输入、实时区域）与 `packages/bundle/tui-app`（发行的 `dsh --profile tui` 组合）是同一落地顺序计划里的后续几刀。

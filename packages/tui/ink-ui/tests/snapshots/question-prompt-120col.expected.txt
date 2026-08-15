@@ -1,0 +1,12 @@
+terminal 120x24 buffer=normal length=24 base=0 viewport=0
+frames synchronized=1
+cursor hidden column=0 viewportRow=5 bufferRow=5
+viewport
+0| "Which widths should the checkpoint matrix record?"
+  style 0-48 bold
+1| "› 1. 80 and 120 columns"
+  style 0-0 bold
+2| "  2. 80 columns only"
+3| "  3. every width the pi-tui suite used"
+4| "❯"
+5-23| <blank>

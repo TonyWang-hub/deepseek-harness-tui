@@ -1,0 +1,10 @@
+terminal 120x24 buffer=normal length=24 base=0 viewport=0
+frames synchronized=1
+cursor hidden column=0 viewportRow=3 bufferRow=3
+viewport
+0| "Approve bash? — writes packages/tui/ink-ui/tests/snapshots and re-records every committed expected output"
+  style 0-12 bold
+1| "[y] allow once   [n] reject"
+  style 0-26 dim
+2| "❯"
+3-23| <blank>

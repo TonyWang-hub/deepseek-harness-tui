@@ -1,0 +1,13 @@
+terminal 80x24 buffer=normal length=24 base=0 viewport=0
+frames synchronized=3
+cursor visible column=2 viewportRow=5 bufferRow=5
+buffer
+0| "❯ you"
+  style 0-4 fg=cyan bold
+1| "re-record the checkpoint matrix"
+2| "● assistant"
+  style 0-10 fg=magenta bold
+3| "The renderer paints this answer line long enough that eighty columns must wrap i"
+4~| "t and one twenty need not."
+5| "❯"
+6-23| <blank>

@@ -51,6 +51,10 @@ export default defineConfig({
       ...(process.env.DSH_EXAMPLE_MODE === 'lib' ? ['apps/web/tests/**/*.snapshot.ts'] : []),
       'apps/cli/tests/**/*.snapshot.ts',
       'examples/*/tests/**/*.snapshot.ts',
+      // Terminal renderer checkpoints: a real Ink mount painting into a real
+      // terminal emulator. Keyless in every mode — it drives the renderer
+      // directly, so `record` has nothing beyond `refresh` to capture.
+      'packages/tui/ink-ui/tests/**/*.snapshot.ts',
     ],
     // Replay never writes committed outputs and every scenario owns its
     // mutable runtime state (the subprocess suites use a unique temp dir and

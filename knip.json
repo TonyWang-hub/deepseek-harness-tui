@@ -252,7 +252,14 @@
         "tests/**/*.spec.ts",
         "tests/**/*.e2e.ts",
         "tests/*.manual.ts",
-        "tests/fixtures/*.ts"
+        "tests/fixtures/*.ts",
+        // Performance-gate shards and their own vitest lane config: run
+        // explicitly (`--config packages/tui/runtime/tests/perf/vitest.perf.config.ts`),
+        // never imported, so both are declared as entries — the same reason
+        // the manual dev-run driver above is.
+        "tests/perf/*.perf.client.ts",
+        "tests/perf/vitest.perf.config.ts",
+        "tests/perf/rss-probe.client.ts"
       ],
       "project": [
         "src/**/*.ts",
@@ -262,10 +269,13 @@
     "packages/tui/ink-ui": {
       // Reconnaissance-spike PoC scripts (`*.poc.ts`, not `*.spec.ts` — see
       // the package README) spawn their fixtures as a child process by path
-      // string, not a static import, so both are declared as entries.
+      // string, not a static import, so both are declared as entries. The
+      // renderer checkpoint suite runs from vitest.snapshot.config.ts, which
+      // the vitest plugin's default test patterns do not cover.
       "entry": [
         "tests/*.poc.ts",
-        "tests/fixtures/*.tsx"
+        "tests/fixtures/*.tsx",
+        "tests/**/*.snapshot.ts"
       ],
       "project": [
         "src/**/*.ts",

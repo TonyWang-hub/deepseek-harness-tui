@@ -1,0 +1,7 @@
+terminal 120x24 buffer=normal length=24 base=0 viewport=0
+frames synchronized=2
+cursor visible column=24 viewportRow=1 bufferRow=1
+viewport
+0| "❯ record the checkpoint matrix at both widths so the wrap rule itself is part of the fixture"
+1| "  then report the matrix"
+2-23| <blank>

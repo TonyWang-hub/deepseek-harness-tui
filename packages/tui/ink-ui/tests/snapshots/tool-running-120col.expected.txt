@@ -1,0 +1,12 @@
+terminal 120x24 buffer=normal length=24 base=0 viewport=0
+frames synchronized=1
+cursor visible column=2 viewportRow=0 bufferRow=0
+viewport
+0| "⠸ [execute] pnpm exec tsx scripts/run-oxlint.ts packages/tui/ink-ui --config .oxlintrc.json"
+  style 2-10 dim
+1| "⠸ [read] packages/tui/ink-ui/src/components/ActivityRegion.tsx"
+  style 2-7 dim
+2| "(1 queued)"
+  style 0-9 dim
+3| "❯"
+4-23| <blank>

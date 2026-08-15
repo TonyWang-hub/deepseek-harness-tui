@@ -131,6 +131,8 @@ export interface ComposedTree {
   readonly rows: EntryTree
   /** The composition's project workspace (bash/fs tool cwd, sandbox root). */
   readonly workspaceCwd: string
+  /** The JSONL session-persistence root this tree reads and writes. */
+  readonly persistenceRoot: string
   /** Tear down: dispose the tree and remove every owned temp directory. */
   dispose(): Promise<void>
 }
@@ -155,17 +157,23 @@ export interface LlmReplayOptions {
  * `realModel: true` for a real-API e2e scenario that keeps `dsh-base`'s own `llm-deepseek`
  * row mounted instead (its shipped config resolves `DEEPSEEK_API_KEY` from the credential
  * seam, then the environment — nothing here mounts a literal key). Mutually exclusive with
- * `llmReplay`.
+ * `llmReplay`. `persistenceRoot` reuses an existing JSONL session root instead of creating a
+ * fresh temp one, and leaves it in place on `dispose()` — the performance gate seeds its
+ * corpus into one root under one tree and resumes it under the next.
  * @returns the booted tree.
  */
 export async function bootHostTree(
-  options: { llmReplay?: LlmReplayOptions; realModel?: boolean } = {},
+  options: { llmReplay?: LlmReplayOptions; realModel?: boolean; persistenceRoot?: string } = {},
 ): Promise<ComposedTree> {
   if (options.llmReplay !== undefined && options.realModel === true) {
     throw new Error('bootHostTree: llmReplay and realModel are mutually exclusive')
   }
   const workspaceCwd = await realpath(await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-ws-')))
-  const persistenceRoot = await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-sessions-'))
+  // A caller-supplied root is the caller's to keep: `dispose()` below removes
+  // only the roots this function itself created, so a benchmark can seed a
+  // corpus into one root under one tree and resume it under the next.
+  const ownedPersistenceRoot = options.persistenceRoot === undefined
+  const persistenceRoot = options.persistenceRoot ?? await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-sessions-'))
   const storageRoot = await mkdtemp(join(tmpdir(), 'dsh-tui-runtime-storage-'))
   const harnessHome = join(workspaceCwd, '.dsh-home')
 
@@ -237,7 +245,7 @@ export async function bootHostTree(
     if (process.cwd() !== originalCwd) process.chdir(originalCwd)
     await ctx.fiber.dispose()
     await rm(workspaceCwd, { recursive: true, force: true })
-    await rm(persistenceRoot, { recursive: true, force: true })
+    if (ownedPersistenceRoot) await rm(persistenceRoot, { recursive: true, force: true })
     await rm(storageRoot, { recursive: true, force: true })
   }
   let rows: EntryTree
@@ -269,5 +277,5 @@ export async function bootHostTree(
     if (process.cwd() !== originalCwd) process.chdir(originalCwd)
   }
 
-  return { ctx, rows, workspaceCwd, dispose }
+  return { ctx, rows, workspaceCwd, persistenceRoot, dispose }
 }
