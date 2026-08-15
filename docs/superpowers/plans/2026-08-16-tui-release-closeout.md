@@ -60,7 +60,7 @@ Use this Chinese counterpart:
 
 - [ ] **Step 3: Correct runtime README and JSDoc ownership**
 
-State in both runtime READMEs that the package bootstraps the Client Context and mounts `mountTuiRenderer` on a real TTY when `render` is enabled. Extend the numbered assembly list with conversation-node registration, conditional renderer mounting, and publication of `{ clientCtx, renderer? }`. Update the mirrored `TuiRuntimeHandle` code fences to import `MountedTuiRenderer` and declare `readonly renderer?: MountedTuiRenderer`.
+State in both runtime READMEs that the package bootstraps the Client Context and mounts `mountTuiRenderer` on a real TTY when `render` is enabled. Extend the numbered assembly list with conversation-node registration, conditional renderer mounting, and publication of `{ clientCtx, renderer? }`. Replace the stale mirrored `TuiRuntimeHandle` code fences with prose naming `clientCtx` and optional `renderer`, and link `src/index.ts` as the owner of the exact TypeScript declaration.
 
 Replace the “No renderer yet” limitation with the real-TTY requirement: non-TTY compositions leave `renderer` undefined, and the shipped TUI profile rejects that state. Keep the built-`lib/client-node.js` test caveat and state that `clientCtx` remains the whole Client Context because the current renderer directly consumes sessions and connection services; no narrower stable facade is defined.
 
