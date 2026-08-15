@@ -62,7 +62,7 @@ Use this Chinese counterpart:
 
 State in both runtime READMEs that the package bootstraps the Client Context and mounts `mountTuiRenderer` on a real TTY when `render` is enabled. Extend the numbered assembly list with conversation-node registration, conditional renderer mounting, and publication of `{ clientCtx, renderer? }`. Update the mirrored `TuiRuntimeHandle` code fences to import `MountedTuiRenderer` and declare `readonly renderer?: MountedTuiRenderer`.
 
-Replace the “No renderer yet” limitation with the real-TTY requirement: non-TTY compositions leave `renderer` undefined, and the shipped TUI profile rejects that state. Keep the built-`lib/client-node.js` test caveat and state that `clientCtx` remains the whole Client Context because the current renderer directly consumes sessions, workspaces, and connection services; no narrower stable facade is defined.
+Replace the “No renderer yet” limitation with the real-TTY requirement: non-TTY compositions leave `renderer` undefined, and the shipped TUI profile rejects that state. Keep the built-`lib/client-node.js` test caveat and state that `clientCtx` remains the whole Client Context because the current renderer directly consumes sessions and connection services; no narrower stable facade is defined.
 
 Apply the same current-state facts to `packages/tui/runtime/src/index.ts`: the module publishes the Client Context to its renderer, and `TuiRuntimeHandle.clientCtx` is consumed by the mounted renderer. Do not change types or runtime statements.
 

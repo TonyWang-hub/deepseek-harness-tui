@@ -62,7 +62,7 @@ The shipped `dsh --profile tui` composition mounts `runtime/` and its `ink-ui/` 
 
 在两份 runtime README 中说明：该包引导 Client Context，并在 `render` 启用且 stdout 为真实 TTY 时挂载 `mountTuiRenderer`。在编号装配列表中加入 conversation-node 注册、条件式渲染器挂载以及 `{ clientCtx, renderer? }` 的发布。更新两边一致的 `TuiRuntimeHandle` 代码围栏，导入 `MountedTuiRenderer` 并声明 `readonly renderer?: MountedTuiRenderer`。
 
-把“尚无渲染器”限制替换为真实 TTY 要求：非 TTY 组合让 `renderer` 保持 undefined，已交付的 TUI profile 会拒绝这种状态。保留已构建 `lib/client-node.js` 测试注意事项，并说明 `clientCtx` 仍是整个 Client Context，因为当前渲染器直接消费 sessions、workspaces 与 connection 服务；目前没有定义更窄的稳定门面。
+把“尚无渲染器”限制替换为真实 TTY 要求：非 TTY 组合让 `renderer` 保持 undefined，已交付的 TUI profile 会拒绝这种状态。保留已构建 `lib/client-node.js` 测试注意事项，并说明 `clientCtx` 仍是整个 Client Context，因为当前渲染器直接消费 sessions 与 connection 服务；目前没有定义更窄的稳定门面。
 
 把相同的当前状态事实应用到 `packages/tui/runtime/src/index.ts`：模块向自身渲染器发布 Client Context，`TuiRuntimeHandle.clientCtx` 由已挂载渲染器消费。不要修改类型或运行时语句。
 
