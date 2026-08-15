@@ -66,7 +66,7 @@ pnpm dsh web
 
 ## 与上游的关系
 
-本仓库是跟踪型 fork：定期合入上游 `master`，终端工作集中在 `packages/tui/*`、`packages/client/connection` 与 `packages/host/apiproxy`，让每次同步保持小巧。这对 `README.md` 归 fork 所有（合并策略：ours）。其余一切——架构、约定、gate、文档——都是上游项目的原样：从 [docs/architecture.md](docs/architecture.md) 与 [docs/development.md](docs/development.md) 开始，智能体请循 [AGENTS.md](AGENTS.md)。
+本仓库拥有独立历史：根提交是上游快照导入（当前 `47f943859bef`），上游同步以单个导入提交落地并注明上游区间，终端工作集中在 `packages/tui/*`、`packages/client/connection` 与 `packages/host/apiproxy`，让每次同步保持小巧。这对 `README.md` 归 fork 所有（合并策略：ours）。其余一切——架构、约定、gate、文档——都是上游项目的原样：从 [docs/architecture.md](docs/architecture.md) 与 [docs/development.md](docs/development.md) 开始，智能体请循 [AGENTS.md](AGENTS.md)。
 
 ## 许可证
 

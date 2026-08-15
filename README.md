@@ -66,7 +66,7 @@ pnpm dsh web
 
 ## Relationship to upstream
 
-This repository is a tracking fork: upstream `master` merges in regularly, and the terminal work stays concentrated in `packages/tui/*`, `packages/client/connection`, and `packages/host/apiproxy` so each sync stays small. This `README.md` pair is fork-owned (merge strategy: ours). Everything else — architecture, conventions, gates, documentation — is the upstream project's, unchanged: start at [docs/architecture.md](docs/architecture.md) and [docs/development.md](docs/development.md), and for agents [AGENTS.md](AGENTS.md).
+This repository carries its own history: it roots at a snapshot import of upstream (currently `47f943859bef`), upstream syncs land as single import commits noted with their upstream range, and the terminal work stays concentrated in `packages/tui/*`, `packages/client/connection`, and `packages/host/apiproxy` so each sync stays small. This `README.md` pair is fork-owned (merge strategy: ours). Everything else — architecture, conventions, gates, documentation — is the upstream project's, unchanged: start at [docs/architecture.md](docs/architecture.md) and [docs/development.md](docs/development.md), and for agents [AGENTS.md](AGENTS.md).
 
 ## License
 
