@@ -30,6 +30,15 @@ const DISPOSED_MARKER = '___SMOKE_DISPOSED___'
 const EXIT_MARKER_PREFIX = '___EXITCODE_'
 const STTY_MARKER = '___STTY_DONE___'
 
+/**
+ * Multiplies every real-time wait ceiling below when running on a shared CI
+ * runner (`process.env.CI`), which is measurably slower and more contended
+ * than a local dev machine — a genuine environment-varying tunable, not a
+ * silent magic number: each wait keeps its own local-machine value and only
+ * scales up under CI.
+ */
+const CI_WAIT_SCALE = process.env.CI !== undefined ? 2 : 1
+
 /** One scripted `finish: stop` model reply carrying only final text. */
 function textEntry(text: string): unknown {
   return {
@@ -76,7 +85,12 @@ describe('pty smoke: dsh --profile tui end to end over a real pty', () => {
       cols: COLS,
       rows: ROWS,
       cwd: REPO_ROOT,
-      env: { ...process.env, FORCE_COLOR: '0', PS1: 'SMOKE$ ' },
+      // BASH_SILENCE_DEPRECATION_WARNING: macOS's bundled bash prints "The
+      // default interactive shell is now zsh." to every interactive session
+      // regardless of --norc/--noprofile (it is not sourced from an rc file);
+      // silencing it keeps that noise out of `raw` so a real assertion
+      // failure's diff is not padded with an unrelated banner.
+      env: { ...process.env, FORCE_COLOR: '0', PS1: 'SMOKE$ ', BASH_SILENCE_DEPRECATION_WARNING: '1' },
     })
 
     let raw = ''
@@ -87,18 +101,28 @@ describe('pty smoke: dsh --profile tui end to end over a real pty', () => {
     const command = `${process.execPath} --import tsx/esm ${FIXTURE} ${overrideFile}; echo ${EXIT_MARKER_PREFIX}$?___\n`
     shell.write(command)
 
-    await waitUntil(() => raw, buffer => buffer.includes(READY_MARKER), 60_000)
+    await waitUntil(() => raw, buffer => buffer.includes(READY_MARKER), 60_000 * CI_WAIT_SCALE)
     await delay(500) // let the first Ink frame (the empty composer) settle before typing
 
     shell.write('hello there')
     await delay(200)
     shell.write('\r')
 
-    await waitUntil(() => raw, buffer => buffer.includes(FINAL_ANSWER_TEXT), 15_000)
+    await waitUntil(() => raw, buffer => buffer.includes(FINAL_ANSWER_TEXT), 15_000 * CI_WAIT_SCALE)
     const rawAtTurnEnd = raw
 
     await delay(150)
     shell.write('\x03') // Ctrl-C: this bundle's tui-runner requests exit once Ink's own exitOnCtrlC path resolves
+
+    // Wait for the disposal marker FIRST, as its own condition, rather than a
+    // bare `expect().toContain()` after the exit-marker wait below: the
+    // fixture prints it synchronously (from a real POSIX TTY write, which
+    // Node performs synchronously) before the process exits, so it precedes
+    // the exit-code echo in real program order — waiting on it directly gives
+    // a full-buffer diagnostic on failure instead of vitest's default
+    // truncated diff (see `packages/tui/runtime/tests/pty-smoke.client.spec.ts`'s
+    // identical structure).
+    await waitUntil(() => raw, buffer => buffer.includes(DISPOSED_MARKER), 15_000 * CI_WAIT_SCALE)
 
     // Waiting on EXIT_MARKER_PREFIX's bare text would resolve instantly and
     // wrongly: bash's own cooked-mode local echo repeats the shell command
@@ -107,12 +131,11 @@ describe('pty smoke: dsh --profile tui end to end over a real pty', () => {
     // process actually exits. The real signal is the substituted numeric
     // form, which only bash's `echo` produces after the process exits.
     const exitMarkerPattern = new RegExp(`${EXIT_MARKER_PREFIX}(\\d+)___`)
-    await waitUntil(() => raw, buffer => exitMarkerPattern.test(buffer), 30_000)
+    await waitUntil(() => raw, buffer => exitMarkerPattern.test(buffer), 30_000 * CI_WAIT_SCALE)
     const exitCodeMatch = exitMarkerPattern.exec(raw)
-    expect(raw).toContain(DISPOSED_MARKER)
 
     shell.write(`stty -a; echo ${STTY_MARKER}\n`)
-    await waitUntil(() => raw, buffer => buffer.includes(STTY_MARKER), 5_000)
+    await waitUntil(() => raw, buffer => buffer.includes(STTY_MARKER), 5_000 * CI_WAIT_SCALE)
     await delay(100)
 
     // Skip past the echoed command line (cooked-mode local echo repeats
@@ -130,8 +153,12 @@ describe('pty smoke: dsh --profile tui end to end over a real pty', () => {
     shell.kill()
 
     expect(rawAtTurnEnd).toContain(FINAL_ANSWER_TEXT)
-    expect(exitCodeMatch?.[1]).toBe('0')
-    expect(readSttyFlag(sttyOutput, 'icanon')).toBe(true)
-    expect(readSttyFlag(sttyOutput, 'echo')).toBe(true)
-  }, 120_000)
+    // Each final assertion below carries the full captured `raw` as its
+    // message: a bare `expect().toBe()` diff truncates a long string (vitest's
+    // own default), which previously hid the real failure behind an
+    // uninformative "expected '...' to contain '...'" snippet.
+    expect(exitCodeMatch?.[1], `raw pty stream:\n${raw}`).toBe('0')
+    expect(readSttyFlag(sttyOutput, 'icanon'), `raw pty stream:\n${raw}`).toBe(true)
+    expect(readSttyFlag(sttyOutput, 'echo'), `raw pty stream:\n${raw}`).toBe(true)
+  }, 120_000 * CI_WAIT_SCALE)
 })

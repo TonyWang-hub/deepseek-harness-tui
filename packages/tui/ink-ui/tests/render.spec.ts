@@ -5,6 +5,7 @@ import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-client-connec
 import type { AgentContext, ConversationSnapshot, ISessions, SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
 import { mountTuiRenderer } from '../src/render.ts'
 import { createFakeStdin, createFakeStdout } from './support/fake-tty.ts'
+import { createManualClock } from './support/manual-clock.ts'
 
 function baseSnapshot(overrides: Partial<ConversationSnapshot> = {}): ConversationSnapshot {
   return {
@@ -340,16 +341,34 @@ describe('mountTuiRenderer', () => {
   })
 
   it('coalesces a rapid stream-classified update (unchanged counts) to the configured frame rate', async () => {
+    // Deterministic replacement for a real-timer sleep: a manual
+    // `schedulerClock` (test-only seam on `MountOptions`, same double
+    // `scheduler/publication-scheduler.spec.ts` uses for the scheduler unit
+    // itself) lets this test drive the frame boundary by an explicit tick
+    // instead of racing a real `setTimeout` against a shared CI runner's
+    // pacing, which the previous `await delay(100)` version occasionally lost.
     const face = new FakeSessionFace(baseSnapshot())
     const sessions = createFakeSessions(face)
     const clientCtx = createClientCtx(sessions)
     const stdout = createFakeStdout()
+    const clock = createManualClock()
     const mounted = await mountTuiRenderer(clientCtx, {
-      sessionId: 's1' as SessionId, stdout, stdin: createFakeStdin(), config: { publishRateFps: 30 },
+      sessionId: 's1' as SessionId, stdout, stdin: createFakeStdin(), config: { publishRateFps: 30 }, schedulerClock: clock,
     })
     face.push(baseSnapshot({ partial: { turn: 0, step: 0, blocks: [{ kind: 'text', text: 'a' }] } }))
     face.push(baseSnapshot({ partial: { turn: 0, step: 0, blocks: [{ kind: 'text', text: 'ab' }] } }))
-    await delay(100)
+    // Both pushes classify as the same 'stream' reason (unchanged counts):
+    // the first arms exactly one pending timer, the second coalesces into it.
+    expect(clock.pendingCount()).toBe(1)
+    expect(stdout.buffer).not.toContain('ab') // not yet published — still coalescing
+    clock.advanceTo(1000) // well past one 30fps frame interval (~34ms)
+    clock.fireDue()
+    // `fireDue()` only runs `publish()`'s synchronous `instance.rerender()`
+    // call; `ActivityRegion`'s own passive-effect re-measurement and Ink's
+    // internal write throttle are real async work the scheduler's own clock
+    // does not drive — `waitForRenderFlush()` is the deterministic boundary
+    // for that (tick-driven, not time-driven).
+    await mounted.waitForRenderFlush()
     expect(stdout.buffer).toContain('ab')
     await mounted.dispose()
   })

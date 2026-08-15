@@ -1,40 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createPublicationScheduler, type PublicationSchedulerClock,
-} from '../../src/scheduler/publication-scheduler.ts'
+import { createPublicationScheduler } from '../../src/scheduler/publication-scheduler.ts'
 import type { ResolvedRendererConfig } from '../../src/config.ts'
-
-/** A fully manual clock: `now()` is a settable counter, timers are queued and fired by the test. */
-function createManualClock(): PublicationSchedulerClock & {
-  advanceTo(ms: number): void
-  fireDue(): void
-  pendingCount(): number
-} {
-  let now = 0
-  const timers = new Map<number, { fireAt: number; handler: () => void }>()
-  let nextId = 1
-  return {
-    now: () => now,
-    setTimeout: (handler, ms) => {
-      const id = nextId++
-      timers.set(id, { fireAt: now + ms, handler })
-      return id
-    },
-    clearTimeout: (handle) => {
-      timers.delete(handle as number)
-    },
-    advanceTo: (ms) => { now = ms },
-    fireDue: () => {
-      for (const [id, timer] of [...timers]) {
-        if (timer.fireAt <= now) {
-          timers.delete(id)
-          timer.handler()
-        }
-      }
-    },
-    pendingCount: () => timers.size,
-  }
-}
+import { createManualClock } from '../support/manual-clock.ts'
 
 const CONFIG_30_FPS: ResolvedRendererConfig = { publishRateFps: 30, sessionListTimeoutMs: 5000 }
 

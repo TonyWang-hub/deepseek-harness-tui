@@ -35,7 +35,7 @@ import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-client-connec
 import type { ConversationSnapshot, ISessions, SessionFace } from '@deepseek-ai/dsh-client-runtime/client'
 import { resolveRendererConfig, type RendererConfig } from './config.ts'
 import { classifySnapshotUpdate } from './scheduler/classify-update.ts'
-import { createPublicationScheduler } from './scheduler/publication-scheduler.ts'
+import { createPublicationScheduler, type PublicationSchedulerClock } from './scheduler/publication-scheduler.ts'
 import { buildActivityModel } from './activity/activity-model.ts'
 import { renderClosedNodeLines } from './transcript/node-lines.ts'
 import { createRowCache } from './transcript/row-cache.ts'
@@ -54,6 +54,16 @@ export interface MountOptions {
   readonly stdout?: NodeJS.WriteStream
   /** Error stream override (tests only; defaults to `process.stderr`). */
   readonly stderr?: NodeJS.WriteStream
+  /**
+   * Publication scheduler timer/clock override (tests only; defaults to real
+   * `setTimeout`/`Date.now`). A real frame-rate-coalesced repaint genuinely
+   * depends on wall-clock pacing, which a shared CI runner cannot guarantee
+   * within a fixed real-time budget; a manual clock lets a test drive the
+   * scheduler's frame boundary deterministically (`schedule()` then advance
+   * and fire the clock) instead of racing a real `setTimeout` — see
+   * {@link PublicationSchedulerClock}.
+   */
+  readonly schedulerClock?: PublicationSchedulerClock
 }
 
 /** A live mounted renderer. */
@@ -76,6 +86,17 @@ export interface MountedTuiRenderer {
    * after Ink already exited on its own, is a no-op.
    */
   dispose(): Promise<void>
+  /**
+   * Await Ink's own render flush (tests only). Firing a `schedulerClock`
+   * tick only runs `publish()`'s synchronous `instance.rerender()` call — it
+   * does not wait for `ActivityRegion`'s own passive-effect re-measurement or
+   * Ink's internal write throttle, both genuine asynchronous work
+   * independent of the publication scheduler's own pacing. Delegates to the
+   * mounted Ink instance's `waitUntilRenderFlush()`, the exact boundary
+   * `tests/support/headless-terminal.ts`'s `settle()` already uses for the
+   * snapshot lane.
+   */
+  waitForRenderFlush(): Promise<void>
 }
 
 async function createSession(clientCtx: Context): Promise<SessionId> {
@@ -200,7 +221,7 @@ export async function mountTuiRenderer(clientCtx: Context, options: MountOptions
     instance.rerender(currentElement())
   }
 
-  const scheduler = createPublicationScheduler(publish, resolvedConfig)
+  const scheduler = createPublicationScheduler(publish, resolvedConfig, options.schedulerClock)
   let previousClassificationSnapshot: ConversationSnapshot = face.getSnapshot()
   const unsubscribe = face.subscribe(() => {
     const next = face.getSnapshot()
@@ -256,5 +277,6 @@ export async function mountTuiRenderer(clientCtx: Context, options: MountOptions
     // app exited", not that value, so it is discarded here.
     waitUntilExit: () => instance.waitUntilExit().then(() => undefined),
     dispose,
+    waitForRenderFlush: () => instance.waitUntilRenderFlush(),
   }
 }
