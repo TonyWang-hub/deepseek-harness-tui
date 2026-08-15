@@ -253,6 +253,20 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/tui/ink-ui": {
+      // Reconnaissance-spike PoC scripts (`*.poc.ts`, not `*.spec.ts` — see
+      // the package README) spawn their fixtures as a child process by path
+      // string, not a static import, so both are declared as entries.
+      "entry": [
+        "tests/*.poc.ts",
+        "tests/fixtures/*.tsx"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts",
+        "tests/**/*.tsx"
+      ]
+    },
     "packages/*/*": {
       "entry": [
         "tests/**/*.spec.ts"

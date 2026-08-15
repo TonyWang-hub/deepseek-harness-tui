@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-tui-runtime",
-  "description": "Terminal application dual-context bootstrap: mounts an in-process client cordis Context over the Host tree's Connection transport",
+  "name": "@deepseek-ai/dsh-tui-ink-ui",
+  "description": "Terminal application renderer spike: the Ink/React 19 dependency island and its scrollback-commit, multiline-input, and terminal-restoration reconnaissance",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/tui/runtime"
+    "directory": "packages/tui/ink-ui"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -32,23 +32,19 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-api-gateway": "workspace:^",
-    "@deepseek-ai/dsh-client-connection": "workspace:^",
-    "@deepseek-ai/dsh-client-runtime": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
-    "@deepseek-ai/dsh-commands": "workspace:^",
-    "@deepseek-ai/dsh-typert-registry": "workspace:^"
+    "ink": "^7.1.1",
+    "react": "^19.2.8"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
-    "@types/js-yaml": "^4.0.9",
-    "js-yaml": "^4.2.0"
+    "@types/react": "^19.2.8",
+    "@xterm/headless": "^6.0.0",
+    "node-pty": "^1.1.0",
+    "string-width": "^8.2.2"
   }
 }

@@ -2647,6 +2647,12 @@ function hostExportSubpaths(manifest: Record<string, unknown>): string[] {
       // never includes (packages/client/*/src/** is Host-excluded) — analyzing
       // it under 'host' throws "resolves to missing source" in collectExports.
       && subpath !== './client-node'
+      // Narrower Node ESM companion of one pure client subtree (see
+      // dsh-client-ui-conversation/tsdown.config.ts's conversationNodesCompanion):
+      // its "types" target resolves into src/client/conversation-nodes/, the
+      // same Host-excluded source tree as ./client-node above, for the same
+      // reason.
+      && subpath !== './conversation-nodes'
       && subpath !== './remote')
 }
 
@@ -2655,7 +2661,8 @@ function clientExportSubpaths(manifest: Record<string, unknown>): string[] {
     .map(([subpath]) => subpath)
     .filter(subpath => subpath === './client'
       || subpath.startsWith('./client/')
-      || subpath === './client-node')
+      || subpath === './client-node'
+      || subpath === './conversation-nodes')
 }
 
 function packageExportTargets(manifest: Record<string, unknown>): [string, string][] {

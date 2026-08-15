@@ -26,6 +26,10 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
+    "./conversation-nodes": {
+      "types": "./lib/types/client/conversation-nodes/register.d.ts",
+      "default": "./lib/conversation-nodes-node.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
@@ -110,6 +114,7 @@
     "lib/index.js",
     "lib/invariant.js",
     "lib/client.js",
+    "lib/conversation-nodes-node.js",
     "lib/types/**/*.d.ts"
   ]
 }

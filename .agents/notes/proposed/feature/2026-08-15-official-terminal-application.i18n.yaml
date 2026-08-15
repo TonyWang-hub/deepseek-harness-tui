@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-08-15-official-terminal-application.md
-2026-08-15-official-terminal-application.md: f419903e402c13e009e45378ef331ac1dc380d88
-2026-08-15-official-terminal-application.zh.md: 35f1c7bb49e63613789250c196417d926cc3cf38
+2026-08-15-official-terminal-application.md: b79465378064112bd6f745e23b2004e5c0804ff3
+2026-08-15-official-terminal-application.zh.md: 0090bd48c592fee8ca8f4903db7da03968f0de71

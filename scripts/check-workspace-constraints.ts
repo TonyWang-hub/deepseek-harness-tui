@@ -136,6 +136,10 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-web-app': ['cordis.patch.yml'],
   '@deepseek-ai/dsh-headless': ['cordis.patch.yml'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
+  // Node ESM companion of ONE pure subtree (conversation-nodes/), not the
+  // whole client half — narrower than the generic `./client-node` pattern
+  // above, so it is not derived automatically.
+  '@deepseek-ai/dsh-client-ui-conversation': ['lib/conversation-nodes-node.js'],
   // The Python runtime uses a distinct closed-resolution bin; the public CLI
   // keeps config-owned bare-package resolution through lib/bin.js.
   '@deepseek-ai/dsh-sdk-jsonrpc-demo': ['lib/packaged-bin.js'],

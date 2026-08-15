@@ -9,13 +9,13 @@
  * `docs/testing.md` § "The with-key policy"); `vitest.e2e.config.ts` loads
  * the repo-root `.env` before this file runs.
  *
- * Assertion strategy mirrors `cordis-yml-file-boot.client.spec.ts`'s own
- * "Host-sourced fallback": this composition mounts no `ConversationNodeDefinition`
- * (that registration lives in a business package deferred past this landing
- * slice — see that spec's ASSEMBLY-GAP FINDING comment), so the client-side
- * sessions face exposes no transcript-content signal at all. The final
- * assistant text is read from the Host tree's own `session/event` stream
- * instead, never from the client-side face nor the agent's own self-report.
+ * Assertion strategy: the final assistant text is read from the Host tree's
+ * own `session/event` stream, never from the client-side face nor the
+ * agent's own self-report — an e2e concern independent of transcript-content
+ * assertions (`tui-runtime` does mount the Chat business Definitions via
+ * `registerConversationNodes`, so the client-side face is no longer empty;
+ * see `cordis-yml-file-boot.client.spec.ts` for client-face transcript
+ * assertions over a scripted, deterministic turn).
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
@@ -81,9 +81,8 @@ describe.skipIf(!hasKey)('tui-runtime: real DeepSeek API turn through the dual-C
     const face = sessions.sessionOf(scope)
     if (face === undefined) throw new Error('sessions.sessionOf(scope) is undefined after open()')
 
-    // Authoritative Host-side completion signal, independent of the
-    // client-side chat/view projection (empty in this composition — see the
-    // module doc's "Assertion strategy" note): listen to the Host tree's own
+    // Authoritative Host-side completion signal (see the module doc's
+    // "Assertion strategy" note): listen to the Host tree's own
     // `session/event` stream for the assistant's final text and the turn end.
     let hostFinalText: string | undefined
     const turnStartedAt = Date.now()

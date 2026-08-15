@@ -35,6 +35,20 @@
  * would carry the SAME cross-merge hazard from the other direction (the
  * Client half's own `declare module` augmentations are fine; a package
  * root's Host-half augmentation is not).
+ *
+ * `registerConversationNodes` rides a narrower publication of the same kind:
+ * `@deepseek-ai/dsh-client-ui-conversation/conversation-nodes`, a Node ESM
+ * companion of ONLY that package's `src/client/conversation-nodes/` subtree
+ * (the Chat business Definitions plus their `ChatSnapshotBuilder` target
+ * builder), never `dsh-client-ui-conversation`'s package root or its
+ * `./client` entry — both of those reach `apply.ts`'s React component
+ * closure, which this Node process cannot load. Without this call, the
+ * mounted `sessions`/`conversationEvents`/`conversationViews` registries stay
+ * populated with zero business Definitions, so every session's
+ * `ConversationSnapshot` (`nodes`, `chat.order`, `turnEnds`, `turnTimings`)
+ * observes only lifecycle facts (`running`, `pending`, `queue`, `openState`)
+ * with no transcript content — the gap `cordis-yml-file-boot.client.spec.ts`
+ * once documented as an ASSEMBLY-GAP FINDING.
  * @module @deepseek-ai/dsh-tui-runtime
  */
 
@@ -44,6 +58,7 @@ import * as connectionClient from '@deepseek-ai/dsh-client-connection/client-nod
 import * as typertRegistryClient from '@deepseek-ai/dsh-typert-registry/client-node'
 import * as remoteClient from '@deepseek-ai/dsh-api-gateway/client-node'
 import * as runtimeClient from '@deepseek-ai/dsh-client-runtime/client-node'
+import { registerConversationNodes } from '@deepseek-ai/dsh-client-ui-conversation/conversation-nodes'
 // Generated Typert Remote descriptor (Host-for-Client artifact), not a
 // Client-vs-Host split — a plain generated object with no Cordis Context
 // merge, safe to import directly.
@@ -112,6 +127,11 @@ export async function apply(ctx: HostContext): Promise<void> {
   await clientCtx.plugin(remoteClient)
   const disposeCommandsRemote = await clientCtx.remote.$mount(commandsRemote)
   await clientCtx.plugin(runtimeClient)
+  // Populates ctx.conversationEvents/ctx.conversationViews (provided by the
+  // runtimeClient plugin just mounted above) with the Chat business
+  // Definitions — see the module doc for why this call, not a whole plugin
+  // mount, is this row's own registration act.
+  registerConversationNodes(clientCtx)
 
   try {
     ctx.effect(() => async () => {

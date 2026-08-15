@@ -37,7 +37,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader, { type EntryTree } from '@deepseek-ai/cordis-plugin-loader'
 import Include, { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { ConnectionHandle, SessionId } from '@deepseek-ai/dsh-client-connection/client'
-import type { ISessions } from '@deepseek-ai/dsh-client-runtime/client'
+import type { AssistantMessageNode, ISessions } from '@deepseek-ai/dsh-client-runtime/client'
 import '@deepseek-ai/dsh-tui-runtime'
 import {
   BASE_PATCH_PATH, healProfilesModuleFallback, INSTALL_ANCHOR, loadBasePatches, REPO_ROOT,
@@ -247,7 +247,6 @@ describe('tui-runtime: cold start from a literal cordis.yml + patch-file pair th
   let connection: ConnectionHandle
   let overrideDir: string
   let overrideFile: string
-  let hostFinalText: string | undefined
 
   beforeAll(async () => {
     overrideDir = await mkdtemp(join(tmpdir(), 'dsh-tui-yaml-boot-replay-'))
@@ -286,63 +285,45 @@ describe('tui-runtime: cold start from a literal cordis.yml + patch-file pair th
     const face = sessions.sessionOf(scope)
     if (face === undefined) throw new Error('sessions.sessionOf(scope) is undefined after open()')
 
-    // Authoritative Host-side completion signal (mirrors
-    // scripted-interactions.client.spec.ts): the client-side chat/view
-    // projection stays empty in this composition (see below), so turn
-    // completion itself is observed from the Host session-event stream.
-    const hostTurnEnded = new Promise<void>((resolve) => {
-      const off = (tree.ctx as unknown as { on: (event: string, fn: (...args: unknown[]) => void) => () => void }).on(
-        'session/event',
-        (...args: unknown[]) => {
-          const event = args[1] as { type: string; data?: { message?: { content?: { type: string; text?: string }[] } } }
-          if (event.type === 'assistant/message') {
-            const textBlock = event.data?.message?.content?.find(block => block.type === 'text')
-            hostFinalText = textBlock?.text
-          }
-          if (event.type !== 'turn/end') return
-          off()
-          resolve()
-        },
-      )
-    })
-
     const prompted = await connection.api.sessions.prompt({
       sessionId, mode: 'queue', content: [{ type: 'text', text: 'Say something back.' }],
     })
     if (!prompted.result.ok) throw new Error(`session.prompt failed: ${prompted.result.error.code}`)
 
-    await Promise.race([
-      hostTurnEnded,
-      new Promise((_resolve, reject) => {
-        setTimeout(() => { reject(new Error('turn/end did not fire within 10s')) }, 10_000)
-      }),
-    ])
-
+    // Client-side completion signal, sourced entirely from the client-side
+    // sessions face pumped over the same mux/host stream this test's
+    // connection already reads. `dsh-tui-runtime`'s own `apply()` now calls
+    // `registerConversationNodes(clientCtx)` (see its module doc), so the
+    // Chat business Definitions this session's Assembler needs are mounted
+    // and `turnEnds` — a `ChatSnapshot.legacy` field (see conversation.ts's
+    // `LegacyConversationSlice` doc) — populates as the turn settles; no
+    // independent Host `session/event` listener is needed to observe
+    // completion, unlike the ASSEMBLY-GAP FINDING this spec once recorded.
     await vi.waitFor(() => {
       expect(face.getSnapshot().running).toBe(false)
       expect(face.getSnapshot().pending).toEqual([])
-    }, { timeout: 5_000, interval: 20 })
+      expect(face.getSnapshot().turnEnds.size).toBeGreaterThan(0)
+    }, { timeout: 10_000, interval: 20 })
 
     const snapshot = face.getSnapshot()
-    // ASSEMBLY-GAP FINDING (not the assumption this test started with): every
-    // transcript-content field on ConversationSnapshot — not just
-    // `nodes`/`chat.order`, but ALSO `turnTimings`/`turnEnds` — mirrors
-    // `ChatSnapshot.legacy` (see conversation.ts's `LegacyConversationSlice`
-    // doc), which only a registered `ConversationNodeDefinition` populates.
-    // `turnTimings`/`turnEnds` are NOT an engine-level raw-log tracker
-    // independent of business Definitions, despite reading like one from
-    // their names and doc comments alone. No Definition is registered by
-    // `tui-runtime` or anything this composition mounts (that registration
-    // lives in a business package, e.g. `packages/client/ui-trajectory`,
-    // deferred past this landing slice per the official-terminal-application
-    // Agent Note's "Model extraction" / "Landing order" sections) — so the
-    // client-side sessions face currently exposes NO transcript-content
-    // signal at all: only session lifecycle (`running`, `pending`, `queue`,
-    // `openState`) is meaningfully populated without a mounted Chat registry.
-    expect(snapshot.nodes).toEqual([])
-    expect(snapshot.chat.order).toEqual([])
-    expect(snapshot.turnEnds.size).toBe(0)
-    expect(snapshot.turnTimings.size).toBe(0)
+    // ASSEMBLY-GAP FINDING, CLOSED: `tui-runtime` now mounts the Chat
+    // business Definitions from `@deepseek-ai/dsh-client-ui-conversation`'s
+    // pure `conversation-nodes` subtree through its Node ESM companion (see
+    // `packages/tui/runtime/src/index.ts`'s module doc), so every
+    // transcript-content field on `ConversationSnapshot` — `nodes`,
+    // `chat.order`, `turnTimings`, `turnEnds` — populates from this
+    // composition, and the final assistant text is readable from the
+    // client-side sessions face alone, never the Host tree's own
+    // `session/event` stream.
+    expect(snapshot.nodes.length).toBeGreaterThan(0)
+    expect(snapshot.chat.order.length).toBeGreaterThan(0)
+    expect(snapshot.turnEnds.size).toBeGreaterThan(0)
+    expect(snapshot.turnTimings.size).toBeGreaterThan(0)
+
+    const finalAssistant = snapshot.nodes.find(
+      (node): node is AssistantMessageNode => node.kind === 'assistant',
+    )
+    const clientFinalText = finalAssistant?.blocks.find(block => block.kind === 'text')?.text
 
     console.log(JSON.stringify({
       sessionId,
@@ -350,13 +331,12 @@ describe('tui-runtime: cold start from a literal cordis.yml + patch-file pair th
       clientRunning: snapshot.running,
       clientPendingCount: snapshot.pending.length,
       clientChatNodeCount: snapshot.chat.order.length,
-      // Only available because this test independently listens to the Host
-      // tree's own `session/event` stream (see hostTurnEnded above) — NOT
-      // read back from the client-side sessions face, which is exactly the
-      // gap this assertion block documents.
-      hostFinalText,
+      // Read back from the client-side sessions face alone — the gap this
+      // assertion block once documented as unreachable without a Host-side
+      // session/event listener.
+      clientFinalText,
     }))
 
-    expect(hostFinalText).toBe(FINAL_ANSWER_TEXT)
+    expect(clientFinalText).toBe(FINAL_ANSWER_TEXT)
   }, 30_000)
 })

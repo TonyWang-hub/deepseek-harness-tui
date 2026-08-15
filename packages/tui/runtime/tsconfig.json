@@ -18,6 +18,9 @@
       "path": "../../client/runtime"
     },
     {
+      "path": "../../client/ui-conversation"
+    },
+    {
       "path": "../../typert/registry"
     },
     {

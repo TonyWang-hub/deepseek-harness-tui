@@ -7,5 +7,6 @@ The official interactive terminal application, over the same client data layer t
 | Package | Role | ctx key |
 |---|---|---|
 | [`runtime/`](runtime/README.md) | Dual-context bootstrap: mounts an in-process Client cordis Context over the Host tree's Connection transport | `tuiRuntime` |
+| [`ink-ui/`](ink-ui/README.md) | Ink/React 19 dependency island; reconnaissance spike answering the scrollback-commit, multiline-input, and terminal-restoration design questions | none |
 
-No renderer ships yet: `runtime/` is the landing-order slice that proves the dual-context boot, the in-process Connection handshake, and the pending-interaction carrier before any Ink UI or bundle exists.
+No renderer ships yet: `runtime/` is the landing-order slice that proves the dual-context boot, the in-process Connection handshake, and the pending-interaction carrier, and `ink-ui/` is the reconnaissance spike that answers three rendering-design questions in the Agent Note's "Risks" section before any renderer or bundle exists.

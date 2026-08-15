@@ -7,5 +7,6 @@
 | 包 | 职责 | ctx key |
 |---|---|---|
 | [`runtime/`](runtime/README.md) | 双 Context 引导：在 Host 树的 Connection 传输之上挂载一个进程内 Client cordis Context | `tuiRuntime` |
+| [`ink-ui/`](ink-ui/README.md) | Ink/React 19 依赖孤岛；回答 scrollback 提交、多行输入、终端恢复三个渲染设计问题的技术侦察 spike | 无 |
 
-目前尚无渲染器：`runtime/` 是落地顺序中的第一刀，先证明双 Context 启动、进程内 Connection 握手与 pending 交互载体本身可用，再引入 Ink UI 或 bundle。
+目前尚无渲染器：`runtime/` 是落地顺序中的第一刀，先证明双 Context 启动、进程内 Connection 握手与 pending 交互载体本身可用；`ink-ui/` 是技术侦察 spike，先回答 Agent Note「Risks」一节里的三个渲染设计问题，再引入正式渲染器或 bundle。

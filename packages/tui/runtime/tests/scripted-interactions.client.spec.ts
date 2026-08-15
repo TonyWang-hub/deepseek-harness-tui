@@ -107,10 +107,13 @@ describe('tui-runtime: scripted turn answers ask-user and approval through the p
     const face = sessions.sessionOf(scope)
     if (face === undefined) throw new Error('sessions.sessionOf(scope) is undefined after open()')
 
-    // Authoritative Host-side completion signal for this turn (independent
-    // of any Client-side chat/view projection, which stays empty without a
-    // mounted ui-conversation event/view registration — out of scope for
-    // this dual-context-bootstrap package, which ships no renderer).
+    // Authoritative Host-side completion signal for this turn. `tui-runtime`
+    // does mount the Chat business Definitions (`registerConversationNodes`
+    // — see its module doc), so the client-side chat/view projection is no
+    // longer necessarily empty; this spec keeps the independent Host
+    // `session/event` listener anyway, since its own focus is the pending-
+    // interaction carrier, not transcript-content assertions (see
+    // `cordis-yml-file-boot.client.spec.ts` for those).
     const hostTurnEnded = new Promise<void>((resolve) => {
       const off = (tree.ctx as unknown as { on: (event: string, fn: (...args: unknown[]) => void) => () => void }).on(
         'session/event',
