@@ -301,14 +301,11 @@ for (const columns of WIDTHS) {
         runningCalls: [runningCall('bash', 'pnpm exec vitest run packages/tui/ink-ui', 'execute')],
       })
       const { terminal, ink } = await mount(columns, appElement(snapshot))
-      // TODO(tui): the recorded `cursor` row is current behavior, not correct
-      // behavior — this checkpoint is what surfaced it. `useCursor`'s position
-      // is relative to the Ink output origin (`ink/build/hooks/use-cursor.js`),
-      // but `Composer.tsx` reports `layout.cursorY`, its own row index, so the
-      // real cursor lands on the frame's first row whenever the activity region
-      // renders anything above the composer. Fixing it needs the composer's
-      // frame offset, which the component cannot know on its own; re-record
-      // this checkpoint with that fix.
+      // The recorded `cursor` row reflects `ActivityRegion`'s measured offset
+      // (`measureElement`, `ActivityRegion.tsx`) added to the composer's own
+      // row: this checkpoint has a reasoning line, a wrapped answer line, and
+      // a running-tool row above the composer, so the cursor lands below all
+      // three, not on the frame's first row.
       await checkpoint('streaming-partial', columns, terminal)
       await ink.dispose()
     })

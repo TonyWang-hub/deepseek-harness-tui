@@ -1,6 +1,6 @@
 terminal 80x24 buffer=normal length=24 base=0 viewport=0
-frames synchronized=1
-cursor visible column=2 viewportRow=0 bufferRow=0
+frames synchronized=2
+cursor visible column=2 viewportRow=4 bufferRow=4
 viewport
 0| "(thinking) Deciding which widths the matrix needs."
   style 0-49 dim

@@ -2,60 +2,55 @@
 
 [English](README.md) | 中文
 
-终端应用的 Ink/React 19 依赖孤岛。这一刀（D2.0）是一次技术侦察 spike：先搭起包边界与依赖孤岛，再回答[官方终端应用 Agent Note](../../../.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md)「Risks」一节提出的三个渲染设计问题，每个问题都配一个针对真实 pty 运行的可执行 PoC。本包目前不交付渲染器、输入组件或实时区域——那是后续的 D2.2，要等这些结论过审之后才会落地。
+终端应用的渲染器，构建在 Ink 7.1.1/React 19 依赖孤岛之上：`mountTuiRenderer`（`src/render.ts`）是唯一入口，负责打开或创建一个 session、订阅它的 `ConversationSnapshot`，并驱动三件事——提交（把已完成的 step 提交进真实终端 scrollback）、发布（对有界活动区做限速重绘）、控制（多行输入框、审批/提问弹窗、Esc 取消）——本包所落地的设计决策见[终端渲染器 MVP Agent Note](../../../.agents/notes/implemented/feature/2026-08-15-tui-terminal-renderer-mvp.md)，本包在落地顺序计划中所处的位置见[官方终端应用 Agent Note](../../../.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md)。
 
-## 依赖选型
+## 模块结构
 
-Ink 最新 major（7.1.1）要求 `react` 与 `@types/react` `>=19.2.0`；在"支持 React 19"这件事上并不存在 Ink 6 与 7 的取舍——Ink 6 本就已经要求 React 19（见 `npm view ink@6.0.0 peerDependencies`）。本包锁定 `ink@^7.1.1` 与 `react@^19.2.8`，与浏览器客户端的 `react@^18.2.0` 树相互隔离——和 pnpm workspace 里每个成员自己的 `node_modules` 天然隔离版本孤岛的方式一样，不需要根级 override，也不共享同一份实例。`@xterm/headless` 与 `node-pty` 仅作为 devDependency 供 `tests/` 下的 PoC 脚本使用。
+- `render.ts` —— `mountTuiRenderer`，把一个 session 的 `SessionFace` 接到发布调度器、行缓存以及已挂载的 Ink `App` 上。
+- `config.ts` —— `RendererConfig`，经 schemastery 校验的 `publishRateFps`（默认 30）与 `sessionListTimeoutMs`（默认 5000），以及 `resolveRendererConfig`。
+- `scheduler/` —— `publication-scheduler.ts`（`PublicationScheduler`，把 `'stream'` 重绘限速在 `publishRateFps` 节奏内，同时立即发布 `'structural'` 重绘）与 `classify-update.ts`（`classifySnapshotUpdate`，靠比较快照的有界计数来区分这两类）。
+- `scrollback/` —— `commit.ts`（`commitToScrollback`，走 `console.log()`/`patchConsole` 这条提交路径）。
+- `activity/` —— `activity-model.ts`（`buildActivityModel`，有界实时视图：流式尾部、运行中的工具、待处理交互、队列计数）。
+- `transcript/` —— `node-lines.ts`（已关闭节点的渲染）、`tool-cards.ts`（`generic`/`terminal`/`diff` 工具结果卡片）、`content-text.ts`（两者共用的内容块展平）、`row-cache.ts`（按宽度分键的 `RowCache`）。
+- `input/` —— `edit-model.ts`（`composerReducer` 与 `foldKeypressEvent`，不依赖 Ink）与 `layout.ts`（`layoutMultilineInput`，CJK 感知的折行/光标算法）。
+- `components/` —— `App.tsx`、`ActivityRegion.tsx`、`Composer.tsx`、`ApprovalPrompt.tsx`、`QuestionPrompt.tsx`、`ToolRunningRow.tsx`。
+- `ansi/` —— `style.ts`（scrollback 提交的纯字符串所用的 SGR 角色）与 `sanitize-terminal.ts`（`sanitizeTerminalOutput`，从捕获到的终端输出里剥离 OSC/DCS/光标控制序列，同时保留 SGR）。
+- `invariant.ts` —— 本包的不变量伴生插件；它不装任何检查，因为 `mountTuiRenderer` 拥有的状态（调度器、行缓存、scrollback 水位线）都是私有闭包状态，由它自己的 `dispose()`/`waitUntilExit()` 负责收尾。
 
-## Q1——不用 `<Static>` 的 scrollback 提交
+## 通过 `patchConsole` 提交 scrollback
 
-**裁决：实证可行，但只能走 Ink 自身的 `console.log()`/`patchConsole` 管道——不能靠手搓的 `instance.clear()` + `process.stdout.write()`。**
+`commitToScrollback`（`scrollback/commit.ts`）提交一个已关闭 step 的渲染行时调用的是 `console.log()`，绝不是手搓的 `instance.clear()` 加 `process.stdout.write()`：Ink 默认的 `render({ patchConsole: true })` 会把 `console.log` 重新路由到 `Ink#writeToStdout`，它先清空活动区、写入这一行，再调用 `restoreLastOutput()` 重画活动区，让它的光标记账与真实终端光标保持同步——`tests/q1-scrollback-commit.poc.ts` 证明了正是这一个机制让已提交的行不会消失。
 
-`ink/build/ink.js` 的 `onRender` 证实了 Note 拒绝 `<Static>` 的理由：`fullStaticOutput`（构造时声明为 `''`，第 249 行）会把每个 `<Static>` 子节点渲染出的文本永久累积下去（`this.fullStaticOutput += staticOutput`，第 354 行与第 416 行），并在 `debug` 模式下每次渲染整体重放——内存随会话长度增长，与 Note 所述完全一致。
+## 有界活动区与待处理交互
 
-不用 `<Static>` 的自然替代方案——调用渲染实例公开的 `clear()`、`process.stdout.write()` 写入已提交的行、让下一次由 state 驱动的渲染重画活动区——已实证测试（`tests/q1-scrollback-commit.poc.ts`，`raw-write` 模式）且**不通过**：已提交的行会从最终屏幕上消失（5 行里 0 行留在终端投影中，尽管每一行确实各自只写入 pty 一次）。读 `Ink#clear()` 能解释原因：它先调用 `this.log.clear()`，再调用 `this.log.sync(this.lastOutputToRender ...)`——后者把 log-update 内部"屏幕上已经是什么"的记账重新锚定到*旧的*活动区内容，而不是锚定到"空"。中间插入的一次裸 `process.stdout.write()` 对这份记账是不可见的，于是 log-update 下一次擦除（是相对光标位置计算的，不是相对行号计算的）会擦掉错误的行——在 PoC 里，刚提交的那一行和下一帧活动区会一起塌缩进同一到两行终端行，而不是正常向上滚动。
+`ActivityRegion.tsx` 渲染的是 Ink 树唯一会实时持有的那部分记录：流式的 assistant 尾部（按 `activity-model.ts` 的 `streamingTailBudget` 做尾部限长，为活动区其余的 chrome 预留行数）、运行中的工具行、至多一个被聚焦的待处理交互（一个审批或一个提问），以及下方的输入框——每个已关闭的节点都会提交进 scrollback 并被丢弃，绝不会重新进入 Ink 树。`ApprovalPrompt.tsx` 与 `QuestionPrompt.tsx` 都通过 web 端同样使用的 `PendingWait.respond()` 载体来应答各自的待处理交互，绝不自建第二个 `UserQuestionProvider` 或审批监听器。
 
-真正可行的策略（`tests/q1-scrollback-commit.poc.ts`，`console-log` 模式，12/12 项断言通过）改走 `console.log()` 提交。`render()` 默认 `patchConsole: true`，会把 `console.log`/`console.error` 路由到 `Ink#writeToStdout`/`writeToStderr`（`ink/build/ink.js`）：同样是"清除再写入"的序列，但之后还会调用 `restoreLastOutput()`——它会立即重放活动区，在其他代码开始运行之前就让 log-update 的记账与真实光标位置保持同步。这是 Ink 自己用来把任意写入与活动区交错在一起的既有惯用法，也是这个版本自带测试已经在用的路径；不是本包发明出来的变通办法。
+## 输入框
 
-**对 D2.2 的设计结论：** 渲染器提交一个已完成的 step 时调用 `console.log()`（或走同一条 `writeToStdout` 路径的等价物），绝不手动调用 `clear()` 后直接写 `stdout`。
+`Composer.tsx` 是一个从零自建的无边框多行输入框，构建在不依赖 Ink 的编辑模型（`input/edit-model.ts`）与排版算法（`input/layout.ts`）之上：Enter 提交非空内容，Shift+Enter 或一个字面的 `\n` 字节插入换行，真实终端光标通过 Ink 自带的 `useCursor()` 跟踪编辑位置。`useCursor` 的坐标是相对 Ink 自身输出原点的，而不是相对输入框的本地行号，因此 `ActivityRegion.tsx` 会用 `measureElement` 测量它自己渲染在输入框上方的高度，把这个测得的行数当作 `rowOffset` 属性传给输入框，让光标落在终端实际画出它的那一行，而不是输入框自己的第一行。
 
-## Q2——无边框多行输入 + 首行/续行不同前缀宽度
+## 发布速率调度器与 Config
 
-**裁决：实证可行；生态里没有现成维护中的包能满足需求，因此必须自建，且其中最难的两点已证明可解。**
+`createPublicationScheduler`（`scheduler/publication-scheduler.ts`）把 `'stream'` 请求（一个 token 增量、一次 spinner 滴答）合并到每个 `RendererConfig.publishRateFps` 区间至多一次重绘，而 `'structural'` 请求（一个待处理交互出现或解决、一个 turn 的边界、一个已关闭节点、临时收件箱变化）立即发布，并取消任何待处理的合并计时器。`RendererConfig` 暴露两个经校验的字段：
 
-`ink-text-input`（最接近的维护中候选）在设计上就是单行的：它的 `useInput` 处理器把 `key.return` 无条件当作提交，也没有携带任何行/row 状态（`ink-text-input@6.0.0` 的 `build/index.js`）。npm 上找到的唯一多行候选 `ink-multiline-input@0.1.0`，发布于 2026 年 1 月，没有可配置的首行/续行非对称前缀，也没有使用track record；它无法替代 Note 的 Risks 一节点名的那两个难点。
+- `publishRateFps` —— 流式重绘的最大帧率，单位 fps（schemastery 约束 1–240，默认 30）。
+- `sessionListTimeoutMs` —— `mountTuiRenderer` 等待一个新建或调用方指定的 session 出现在 `ISessions.list` 里的毫秒数，超时才会打开它（schemastery 约束 1–60000，默认 5000）。
 
-`tests/fixtures/q2-multiline-input-app.tsx` 是一个从零自建的多行输入，证明了这两点：
+## 快照 lane
 
-1. **非对称前缀宽度。** 首行用 `❯ `（2 个显示列）；此后每一行——无论是折行续接还是下一条逻辑行——都用 `    `（4 列）。两类行各自算出不同的折行预算（`COLUMNS - 前缀宽度`），按每个渲染行现算，而不是假设统一。
-2. **CJK 感知的折行。** `string-width`（本就是 Ink 的传递依赖；这里直接使用）逐字符测量终端列宽，因此折行永远不会切开一个双宽字符，也不会在中英混排行里数错列数。
+`tests/tui.snapshot.ts` 把每种交互状态画进一个真实的终端模拟器（`tests/support/headless-terminal.ts`，一个跑在假 TTY 之后的 `@xterm/headless` 实例），钉住一份 cell 级投影：按实际宽度折行、光标位置、经真实 `console.log` 路径提交的 scrollback，以及每个 cell 的 SGR 属性——这些都是它旁边的组件用例（`ink-testing-library` 的 `lastFrame()` 字符串）给不出的证据，因为那个字符串是 Ink*打算*写出的内容，不是终端解析真实字节流之后*显示*出来的内容。每个 checkpoint 都在 80 与 120 列各录一份，这一对宽度正好跨在本包自身对折行敏感的 fixture 文本两侧。
 
-真实的终端光标——而不是 `ink-text-input` 那种假的反色光标块——通过 `useCursor()`（`ink/build/hooks/use-cursor.js`，Ink 7 自带；这里没有发明任何光标 trick）跟踪编辑位置。
-
-`tests/q2-multiline-input.poc.ts` 在真实 pty 上以刻意收窄的 20 列宽度驱动该 fixture，按键脚本经过特意挑选，使预期的折行结果与光标位置可以手工推导（推导过程写在 PoC 自己的注释里），4 项断言全部通过：渲染出的行与手工推导的折行结果完全一致（包括一行恰好落在 20 列边界、无一位偏差），3 次左方向键之后真实 xterm 光标位置与手工推导的插入点一致，Ctrl+D 导出的 fixture 内部逻辑行模型也与按键脚本一致，且这一项验证与渲染结果彼此独立。
-
-**对 D2.2 的设计结论：** 把输入组件当作真实的、有明确范围的工作来做预算（编辑模型、折行算法、光标定位，未来还要考虑真正 Shift+Enter 所需的 IME/kitty-keyboard），而不是"接入一个现成包"。这个 PoC 用 Ctrl+J（发送一个字面字节）触发换行的按键绑定，只是"插入换行但不提交"的替身；真正的 Shift+Enter 需要 kitty keyboard 协议或对应终端的转义序列，超出本次 spike 范围，留待后续。
-
-## Q3——退出时的终端恢复
-
-**裁决：Ink 7.1.1 在已测试的三条路径上均已妥善处理——未发现需要自建补丁的缺口。**
-
-读 `ink/build/components/App.js` 的卸载清理 effect（`useEffect(() => () => { cliCursor.show(stdout); 如仍启用则关闭 raw mode; 如仍启用则关闭 bracketed paste }, ...)`）可见 Ink 已经把光标可见性、raw mode、bracketed paste 的恢复收敛到同一处，只要 React 树卸载就会执行。`ink/build/ink.js` 把这次卸载接到了全部三条路径上：
-
-- **正常退出**：`useApp().exit()` 调用 `onExit` → `Ink#handleAppExit` → `Ink#unmount()` → 树卸载 → 清理 effect 执行。
-- **Ctrl+C**：`App.js` 的 `handleInput` 检查 `input === '\x03' && exitOnCtrlC`（默认 `true`），直接调用 `handleExit()`，在同一条卸载路径跑之前就显式关闭了 raw mode。
-- **未捕获异常**：`this.unsubscribeExit = signalExit(this.unmount, { alwaysLast: false })`（`ink.js` 构造函数）挂钩了 `signal-exit` 这个依赖对进程 `exit` 事件的拦截——即使在 Node 默认的未捕获异常处理展开之后，这个事件通常仍会触发（除非某个竞争的 exit handler 内部又调用了 `process.exit()`）——同一条卸载路径也会从这里执行。
-
-`tests/q3-terminal-restoration.poc.ts` 没有只依赖读源码的结论，而是对真实进程状态做了核验：针对三种模式（`normal`、`ctrlc`、`throw`，定义在 `tests/fixtures/q3-exit-app.tsx`）各自起一个真实的 `bash`、在它自己的 pty 里运行，该 fixture（同时通过 `useInput` 启用 raw mode、通过 `usePaste` 启用 bracketed paste）作为它的子进程运行；等 fixture 退出、shell 提示符回来之后，用 `stty -a` 读 pty 的真实 termios 状态——而不是从已经死掉的 fixture 进程内部读一个值。光标可见性与 bracketed paste 不是 termios 的位，因此改从原始字节流里最后一次相关的 DEC 私有模式转义序列（`\x1b[?25h`/`l`、`\x1b[?2004h`/`l`）读取。全部 12 项断言（4 个维度 × 3 种模式）通过：`icanon` 与 `echo` 均已恢复，光标留在可见状态，bracketed paste 留在关闭状态，三条路径概莫能外。
-
-这个结果与 Note 的预期框架（把它列为待解决的风险）以及历史先例（已删除的、基于 pi-tui 的旧实现当年为终端恢复打过 dist 层依赖补丁）都不一致——Ink 已经成熟了不少：这次 spike 在已测试的三条路径上没有发现需要自建补丁的缺口。本次 spike 未覆盖的边缘情况：单独的 SIGTERM（本次只测了 Ctrl+C 的原始字节与一次未捕获异常）、清理 effect 自身崩溃的情形，以及 Linux（本次 spike 只在 macOS/darwin 上跑过；恢复机制——一个 React 卸载 effect 加上 `signal-exit` 依赖——原理上与平台无关，但本次未在 Linux 上复核）。
-
-**对 D2.2 的设计结论：** 针对本次测试的这三条路径，不需要在 Ink 自身的 `render()`/`unmount()` 生命周期之上再加一层自建的终端恢复垫片；如果上述未测边缘情况对最终交付有影响，把时间预算留给它们。
+```sh
+pnpm exec vitest run --config vitest.snapshot.config.ts packages/tui/ink-ui
+DSH_SNAPSHOT=refresh pnpm exec vitest run --config vitest.snapshot.config.ts packages/tui/ink-ui
+```
 
 ## 已知局限与延后事项
 
-- **本包尚不交付渲染器、输入组件或实时区域**——这一刀是依赖孤岛加三个 PoC；真正的组件树落在后续的 `D2.2`。
-- **`tests/` 下的 PoC 脚本不是 vitest spec**（文件名是 `*.poc.ts`，不是 `*.spec.ts`——见 `vitest.config.ts` 的 `testIncludes`），因此没有任何东西会在每次提交时执行它们；它们会起一个真实 pty、按真实时钟驱动定时器，速度慢，也会把 PTY/ANSI 解析的不稳定性带进覆盖率门禁——而这次 spike 的证据是用来被人读的，不是每次提交都要重跑一遍。`tsconfig.client.json` 的 `include` 确实覆盖了它们（`packages/tui/ink-ui/tests/**/*.ts(x)`），所以 `tsc -b tsconfig.client.json` 仍会对 PoC 驱动脚本和它们的 fixture 做静态类型检查——被排除在日常测试/覆盖率运行之外的，只是它们那次真实 pty 执行本身。手动运行：`pnpm exec tsx packages/tui/ink-ui/tests/q1-scrollback-commit.poc.ts`（以及 `q2-...`、`q3-...`）。
-- **Q3 只覆盖了 macOS**——恢复机制（一个 React 卸载 effect 加 `signal-exit` 依赖）原理上与平台无关；本次 spike 未在 Linux 上复核。
-- **Q2 的换行按键绑定（Ctrl+J）只是 PoC 的替身**——真正的 Shift+Enter 需要 kitty keyboard 协议或对应终端的转义序列，留给渲染器那一刀处理。
+- **`read`/`search`/`web` 工具结果走通用卡片渲染** —— `transcript/tool-cards.ts` 目前还没有为这三种工具类别单独做卡片；只有 `terminal` 与 `diff` 结果拿到了专门的排版。
+- **没有 `/history` 分页器，也没有尾部重建** —— `--resume <sessionId>`（[已上线的 `dsh --profile tui` 组合](../../../.agents/notes/implemented/feature/2026-08-15-tui-app-bundle-composition.md)）打开一个既有 session 时不会回填它此前的记录；挂载时快照里已有的节点是提交基线，绝不会被重新回放进 scrollback。
+- **多段 `ask_user_question` 只有第一段可应答** —— `QuestionPrompt.tsx` 把之后的每一段都渲染成提示性文字，没有 `options`（自由文本）的一段只显示一行提示，不接受输入。
+- **Shift+Enter 需要 kitty keyboard 协议明确上报** —— 其他情况下，一个字面的 `\n` 字节（Ctrl+J）是"插入换行但不提交"的既定替身。
+- **终端恢复的验证只覆盖了 macOS** —— `tests/q3-terminal-restoration.poc.ts` 在 macOS 上验证了 Ink 自己的卸载清理（光标可见性、raw mode、bracketed paste）覆盖三条退出路径；这个机制原理上与平台无关，但未在 Linux 上复核。
+- **`tests/` 下的 Q1/Q2/Q3 侦察脚本不是 vitest spec**（`*.poc.ts`，被 `vitest.config.ts` 的 `testIncludes` 排除），因此没有任何东西会在每次提交时运行它们，不过 `tsc -b tsconfig.client.json` 仍会对它们做类型检查；每一个都手动运行，例如 `pnpm exec tsx packages/tui/ink-ui/tests/q1-scrollback-commit.poc.ts`。
+- **渲染器 checkpoint 快照 lane 钉住的是两种宽度下的七种交互状态，不是每一种可能的画面** —— `tests/tui.snapshot.ts` 覆盖了空闲输入框、一次进行中的流式回合、运行中的工具、一个审批弹窗、一个提问弹窗、应答之后的 scrollback，以及一份多行草稿；新增一种交互状态需要补它自己的 checkpoint。

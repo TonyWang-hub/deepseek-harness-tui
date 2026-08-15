@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-15-composer-bundled-enter-submission.zh.md)
+
 ## Problem
 
 `dsh --profile tui` against the real DeepSeek API deterministically reproduced: composer ready, a full prompt written to the pty in one call (text ending in `\r`), then zero response for the full wait bound — no streaming, no spinner, no error — with the typed text still sitting in the composer row. The same renderer's own pty smoke test (`packages/tui/runtime/tests/pty-smoke.client.spec.ts`) stayed green because it writes the prompt text and `\r` as two separate `shell.write()` calls with a delay between them, and `packages/tui/ink-ui/tests/components/Composer.spec.tsx`'s own "Enter submits" test does the same split.

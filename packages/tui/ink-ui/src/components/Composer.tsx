@@ -63,6 +63,16 @@ export interface ComposerProps {
    * keystroke is never handled twice. Default `true`.
    */
   readonly isActive?: boolean
+  /**
+   * Rows the activity region renders above this composer in the current
+   * frame (the streaming tail, running-tool rows, and the queued-input hint —
+   * whatever `ActivityRegion` measures itself to occupy before mounting the
+   * composer). `useCursor`'s position is relative to Ink's own output origin
+   * (`ink/build/hooks/use-cursor.js`), not to this component's local rows, so
+   * the caller's real frame offset — not this component's own row index —
+   * must land in the position it reports. Default `0`.
+   */
+  readonly rowOffset?: number
 }
 
 /**
@@ -70,7 +80,7 @@ export interface ComposerProps {
  * @param props - see {@link ComposerProps}.
  * @returns the composer element.
  */
-export function Composer({ onSubmit, isActive = true }: ComposerProps): React.JSX.Element {
+export function Composer({ onSubmit, isActive = true, rowOffset = 0 }: ComposerProps): React.JSX.Element {
   const [state, dispatch] = useReducer(composerReducer, EMPTY_COMPOSER_STATE)
   const { stdout } = useStdout()
   const { setCursorPosition } = useCursor()
@@ -85,7 +95,7 @@ export function Composer({ onSubmit, isActive = true }: ComposerProps): React.JS
   const layout = layoutMultilineInput(state.lines, state.caret, columns, PREFIX_WIDTHS)
   const cursorRow = layout.rows[layout.cursorY]
   const cursorPrefixWidth = cursorRow?.isFirst === true ? PREFIX_WIDTHS.first : PREFIX_WIDTHS.continuation
-  setCursorPosition(isActive ? { x: cursorPrefixWidth + layout.cursorX, y: layout.cursorY } : undefined)
+  setCursorPosition(isActive ? { x: cursorPrefixWidth + layout.cursorX, y: rowOffset + layout.cursorY } : undefined)
 
   return (
     <Box flexDirection="column">

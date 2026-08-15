@@ -1,6 +1,6 @@
 terminal 80x24 buffer=normal length=24 base=0 viewport=0
-frames synchronized=1
-cursor visible column=2 viewportRow=0 bufferRow=0
+frames synchronized=2
+cursor visible column=2 viewportRow=4 bufferRow=4
 viewport
 0| "⠸ [execute] pnpm exec tsx scripts/run-oxlint.ts packages/tui/ink-ui --config"
   style 2-10 dim

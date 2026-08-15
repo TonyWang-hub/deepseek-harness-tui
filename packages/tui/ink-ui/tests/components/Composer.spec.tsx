@@ -1,7 +1,9 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from 'ink-testing-library'
+import { Box, Text } from 'ink'
 import { Composer } from '../../src/components/Composer.tsx'
+import { HeadlessTerminal, mountInk } from '../support/headless-terminal.ts'
 
 afterEach(() => {
   cleanup()
@@ -95,5 +97,33 @@ describe('Composer', () => {
     await delay(60)
     expect(instance.lastFrame()).not.toContain('hello')
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  // Real terminal cursor placement is invisible to `ink-testing-library`'s
+  // `lastFrame()` (see `tests/tui.snapshot.ts`'s module doc), so this reads
+  // the actual cursor row back through the headless-terminal harness instead,
+  // over three filler rows standing in for `ActivityRegion`'s measured region
+  // above the composer — proving the `rowOffset` arithmetic directly, without
+  // going through the activity model or its own row-measuring effect.
+  it('reports the terminal cursor row as rowOffset plus its own internal row', async () => {
+    const terminal = new HeadlessTerminal(80, 10)
+    const rowOffset = 3
+    const ink = await mountInk(
+      terminal,
+      <Box flexDirection="column">
+        <Text>one</Text>
+        <Text>two</Text>
+        <Text>three</Text>
+        <Composer onSubmit={() => {}} rowOffset={rowOffset} />
+      </Box>,
+    )
+    // Two logical lines via a literal newline byte puts the caret (and so the
+    // composer's own cursorY) on internal row 1, distinct from row 0 — the
+    // case the fixed `rowOffset` plumbing (`Composer.tsx`, `ActivityRegion.tsx`)
+    // exists to get right, not just the row-0 case every other checkpoint pins.
+    await ink.type('first\nsecond')
+    const snapshot = await terminal.snapshot()
+    expect(snapshot).toContain(`cursor visible column=8 viewportRow=${rowOffset + 1} bufferRow=${rowOffset + 1}`)
+    await ink.dispose()
   })
 })

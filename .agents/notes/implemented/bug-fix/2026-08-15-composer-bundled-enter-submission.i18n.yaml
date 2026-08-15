@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-15-composer-bundled-enter-submission.md
+2026-08-15-composer-bundled-enter-submission.md: 4c9914e98688a39bdf43932988a678ebef990b33
+2026-08-15-composer-bundled-enter-submission.zh.md: f214c3a7f32dcb2f9e0893b48af8e2fdeab349a9
