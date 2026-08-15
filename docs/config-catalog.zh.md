@@ -2796,6 +2796,35 @@ export type ToolPresentationMode = 'native' | 'code' | 'both'
 
 来源：[`packages/core/tools/src/index.ts:654`](../packages/core/tools/src/index.ts)
 
+<a id="deepseek-aidsh-tui-runtime"></a>
+
+## `@deepseek-ai/dsh-tui-runtime`
+
+需要：`connection`
+
+```ts config-catalog
+/** Public plugin configuration. */
+export interface Config {
+  /**
+   * Mount the terminal renderer over the bootstrapped Client tree once it is
+   * ready. Takes effect only under a real TTY `stdout`: a piped/CI process
+   * or a test harness has no terminal to render into, so this plugin
+   * silently skips mounting in that case rather than treating `render` as
+   * unset. Default `true`.
+   */
+  render?: boolean
+  /**
+   * An existing session id to open instead of creating a fresh one (a `dsh
+   * --profile tui --resume <sessionId>` invocation). Passed through to
+   * `mountTuiRenderer`'s `MountOptions.sessionId` unchanged; absent, the
+   * renderer creates a fresh session as before.
+   */
+  resumeSessionId?: string
+}
+```
+
+来源：[`packages/tui/runtime/src/index.ts:97`](../packages/tui/runtime/src/index.ts)
+
 <a id="deepseek-aidsh-typert-loader"></a>
 
 ## `@deepseek-ai/dsh-typert-loader`
@@ -3088,7 +3117,7 @@ export interface Config {
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — 需要 `tools`（[`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts)）
 - `@deepseek-ai/dsh-tool-cordis` — 需要 `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect`（[`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)）
 - `@deepseek-ai/dsh-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)）
-- `@deepseek-ai/dsh-tui-runtime` — 需要 `connection`（[`packages/tui/runtime/src/index.ts`](../packages/tui/runtime/src/index.ts)）
+- `@deepseek-ai/dsh-tui-app` — 需要 `tuiRuntime`（[`packages/bundle/tui-app/src/index.ts`](../packages/bundle/tui-app/src/index.ts)）
 - `@deepseek-ai/dsh-user-questions`（[`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts)）
 
@@ -3146,6 +3175,7 @@ export interface Config {
 - `@deepseek-ai/dsh-session-title-llm`（[`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts)）
 - `@deepseek-ai/dsh-subagent-in-process-driver`（[`packages/subagent/subagent-in-process-driver/src/index.ts`](../packages/subagent/subagent-in-process-driver/src/index.ts)）
 - `@deepseek-ai/dsh-timeout`（[`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts)）
+- `@deepseek-ai/dsh-tui-ink-ui`（[`packages/tui/ink-ui/src/index.ts`](../packages/tui/ink-ui/src/index.ts)）
 - `@deepseek-ai/dsh-typert-generator`（[`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts)）
 - `@deepseek-ai/dsh-typert-protocol`（[`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts)）
 - `@deepseek-ai/dsh-typert-registry`（[`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts)）

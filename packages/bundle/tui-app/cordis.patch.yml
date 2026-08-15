@@ -1,0 +1,102 @@
+# The dsh-tui-app bundle patch: the terminal surface over the dsh-base layer.
+# It mounts Connection's Host half and the API gateway so a second, in-process
+# Client cordis Context (`@deepseek-ai/dsh-tui-runtime`) can reach the same
+# object layer the Web GUI runs, browser-free — never a Host, HTTP server, or
+# browser plugin. `dsh-base`'s own agent-plane rows (tool-bash, tool-fs,
+# skill-filesystem, plan-mode, subagents, …) stay exactly as base composes
+# them: base keeps that plane process-wide for the TUI (the Web surface is
+# what disables it, behind per-session agent presets — see
+# packages/bundle/web-app/cordis.patch.yml's own comment on this split), so
+# this patch adds only the terminal-specific rows.
+#
+# The tui-startup plugin injects `cmdlineArgs` and provides `tuiStartup` as an
+# ordinary Cordis service; the tui-runtime row injects that service so Loader
+# resolves its `resumeSessionId` expression only after it exists.
+# `dsh --profile tui --help` provides neither service, so no renderer mounts.
+
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+
+# The shared module-reload HMR row stays off; the launcher's watch-only
+# fallback still keeps the user patch layers live until the run exits (same
+# reasoning as the headless and web bundles).
+- id: hmr
+  disabled: true
+
+- id: tools
+  config:
+    # Keep the same temporary process-wide Code Mode opt-in as the other surfaces.
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+- insert:
+    # Code Mode is a core execution capability, not a Web component.
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    # ApiProxyService's remaining hard `inject` entries dsh-base does not
+    # itself mount (it composes for the TUI's own process-wide agent, one
+    # layer up): workspaceRegistry (storage-backed) and directoryPicker.
+    - id: storage
+      name: '@deepseek-ai/dsh-storage'
+
+    - id: storage-json
+      name: '@deepseek-ai/dsh-storage-json'
+      config:
+        root: !!js dshHomePath('storages')
+
+    - id: storage-domain
+      name: '@deepseek-ai/dsh-storage-domain'
+      config:
+        backend: json
+
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    # No display, no browser upload flow, no SSH launch to detect: the
+    # terminal composition has no picker UI of its own, so it mounts the
+    # backend directly rather than the auto chooser (which injects `webServer`
+    # and would leave this row pending forever with no HTTP server mounted).
+    - id: directory-picker
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+
+    # Present in every shipped agent preset's agent.cordis.yml but never at
+    # dsh-base's own top level (presets did not exist when this row's
+    # process-wide home was chosen) — this composition has no preset plane
+    # (like headless), so it mounts this tool directly, matching every other
+    # model-facing tool already top-level in dsh-base.
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
+
+    # The transport-agnostic API gateway every client shape shares.
+    - id: api-gateway
+      name: '@deepseek-ai/dsh-host-apiproxy'
+
+    # Host-half Connection: registers `ctx.connection` and its in-process
+    # fetch handler. No listening socket binds — trustedHosts governs only
+    # the HTTP/WebSocket carrier this composition never mounts.
+    - id: connection
+      name: '@deepseek-ai/dsh-client-connection'
+      config:
+        trustedHosts: []
+
+    # Ordinary provider for the parsed `--resume` flag. Its plugin-level
+    # injection waits for cmdlineArgs; no launcher metadata or special row
+    # kind is needed.
+    - id: tui-startup
+      name: '@deepseek-ai/dsh-tui-app/startup'
+
+    # Dual-context bootstrap: mounts the Client tree over `ctx.connection`'s
+    # in-process transport and, under a real TTY, the terminal renderer.
+    - id: tui-runtime
+      name: '@deepseek-ai/dsh-tui-runtime'
+      inject: [connection, tuiStartup]
+      config:
+        resumeSessionId: !!js ctx.tuiStartup.resumeSessionId
+
+    # This app's own process owner: fails loud without a real terminal,
+    # otherwise waits for the mounted renderer to exit and requests process
+    # exit through the launcher-provided `ctx.appExit` host hook.
+    - id: tui-runner
+      name: '@deepseek-ai/dsh-tui-app'

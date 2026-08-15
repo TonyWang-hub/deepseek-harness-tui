@@ -37,7 +37,8 @@ interface TuiRuntimeHandle {
 
 ## 配置
 
-无。本包没有自己的部署可变调优项；它只是原样接好一个已有的 Config 表面（Connection 的、Runtime 的）。
+- `render`（默认 `true`）——在 Client 树就绪后挂载终端渲染器，以真实 TTY `stdout` 为门槛（管道/CI 进程或测试环境没有终端可渲染，所以本插件在那种情况下悄悄跳过挂载，而不是把 `render` 当作未设置处理）。
+- `resumeSessionId`（可选）——打开一个既有会话而不是新建一个（`dsh --profile tui --resume <sessionId>`）。原样传给 `mountTuiRenderer` 的 `MountOptions.sessionId`，在这一个点上打上品牌；`mountTuiRenderer` 自身的 MVP 限制依旧成立——挂载时会话里已有的节点是已提交的基线，绝不会被回放进 scrollback。
 
 ## Known Limitations and Deferred Work
 

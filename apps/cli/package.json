@@ -46,6 +46,7 @@
     "@deepseek-ai/dsh-plan-mode": "workspace:^",
     "@deepseek-ai/dsh-terminal": "workspace:^",
     "@deepseek-ai/dsh-terminal-bash": "workspace:^",
+    "@deepseek-ai/dsh-tui-app": "workspace:^",
     "@deepseek-ai/dsh-pwsh-local": "workspace:^",
     "@deepseek-ai/dsh-pwsh-sandbox": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",

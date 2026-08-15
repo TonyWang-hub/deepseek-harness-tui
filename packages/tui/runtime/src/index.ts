@@ -45,6 +45,14 @@
  * renderer's own lifecycle is folded into this plugin's fiber, disposed
  * before the Client tree it renders.
  *
+ * `Config.resumeSessionId`, when set, opens that existing session instead of
+ * creating a fresh one (`MountOptions.sessionId`) — the one cross-boundary id
+ * this plugin brands: a plain configured string in, `SessionId` out, at the
+ * single point that reads it. `mountTuiRenderer`'s own MVP limitation still
+ * applies unchanged: nodes already in the session at mount time are the
+ * committed baseline and are never replayed into scrollback (no backfill/tail
+ * rebase in this cut).
+ *
  * `registerConversationNodes` rides a narrower publication of the same kind:
  * `@deepseek-ai/dsh-client-ui-conversation/conversation-nodes`, a Node ESM
  * companion of ONLY that package's `src/client/conversation-nodes/` subtree
@@ -69,7 +77,7 @@ import * as typertRegistryClient from '@deepseek-ai/dsh-typert-registry/client-n
 import * as remoteClient from '@deepseek-ai/dsh-api-gateway/client-node'
 import * as runtimeClient from '@deepseek-ai/dsh-client-runtime/client-node'
 import { registerConversationNodes } from '@deepseek-ai/dsh-client-ui-conversation/conversation-nodes'
-import { mountTuiRenderer, type MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
+import { mountTuiRenderer, type MountedTuiRenderer, type MountOptions } from '@deepseek-ai/dsh-tui-ink-ui'
 // Generated Typert Remote descriptor (Host-for-Client artifact), not a
 // Client-vs-Host split — a plain generated object with no Cordis Context
 // merge, safe to import directly.
@@ -95,11 +103,22 @@ export interface Config {
    * unset. Default `true`.
    */
   render?: boolean
+  /**
+   * An existing session id to open instead of creating a fresh one (a `dsh
+   * --profile tui --resume <sessionId>` invocation). Passed through to
+   * `mountTuiRenderer`'s `MountOptions.sessionId` unchanged; absent, the
+   * renderer creates a fresh session as before.
+   */
+  resumeSessionId?: string
 }
 
 /** Schemastery config exposed by the plugin. */
 export const Config: z<Config> = z.object({
   render: z.boolean().default(true),
+  // No `.required()`: schemastery treats a plain field as optional by
+  // default, matching Config.resumeSessionId's own `?:` (absent when a
+  // `dsh --profile tui` invocation named no `--resume`).
+  resumeSessionId: z.string(),
 })
 
 /**
@@ -181,7 +200,14 @@ export async function apply(ctx: HostContext, config: Config): Promise<void> {
   let renderer: MountedTuiRenderer | undefined
   try {
     if (config.render && process.stdout.isTTY) {
-      renderer = await mountTuiRenderer(clientCtx)
+      // Branded at this single boundary point (the one cross-boundary id this
+      // plugin's own Config carries as a plain string) — never validated
+      // beyond schemastery's `z.string()`, matching `SessionId`'s own
+      // "compile-time cast, no runtime cost" contract.
+      const mountOptions: MountOptions = config.resumeSessionId === undefined
+        ? {}
+        : { sessionId: config.resumeSessionId as NonNullable<MountOptions['sessionId']> }
+      renderer = await mountTuiRenderer(clientCtx, mountOptions)
     }
   } catch (error) {
     // The renderer mount is the last step before this plugin registers its

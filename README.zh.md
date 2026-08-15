@@ -16,7 +16,7 @@
 │        │  connection.inProcessHandler()   (no socket, no WS) │
 │  Client Context: connection + Typert Remote + client runtime │
 │        │  pending-interaction carrier (questions, approvals) │
-│  Terminal renderer (Ink) — in development                    │
+│  Terminal renderer (Ink)                                      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,8 +29,8 @@
 | 进程内载体：generation 持有的事件流、中止契约、泛型 channel 路由、webServer 可选 | ✅ 已交付——28 个对抗性回归测试，经真实 DeepSeek API 验证 |
 | 双 Context 终端运行时（`packages/tui/runtime`）：零 socket 启动、跨 host 重组重连、经 pending 载体完成 ask-user 与审批 | ✅ 已交付 |
 | 客户端核心的 Node ESM 发布面（`./client-node` companions） | ✅ 已交付 |
-| 终端渲染器（Ink）：scrollback 提交 + 有界活动区 | 🚧 下一步 |
-| 开箱即用的 `tui` profile（`dsh --profile tui`） | 🚧 下一步 |
+| 终端渲染器（Ink）：scrollback 提交 + 有界活动区 | ✅ 已交付 |
+| 开箱即用的 `tui` profile（`dsh --profile tui`） | ✅ 已交付 |
 | `/history` 分页器、client runtime tail rebase、长会话性能门 | 🗺 路线图 |
 
 设计记录见[终端应用 Agent Note](.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md)。
@@ -53,6 +53,10 @@ pnpm exec vitest run --config vitest.e2e.config.ts packages/tui/runtime/tests/re
 ## 运行
 
 完整 harness 按上游出厂形态原样运行。参见 [Web UI 指南](docs/user/guide/index.md)。
+
+```sh
+pnpm dsh --profile tui               # the terminal application, in-process over the shared client core
+```
 
 ### 从源码运行
 

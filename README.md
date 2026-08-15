@@ -16,7 +16,7 @@ Existing terminal clients for the harness are external protocol clients: they re
 │        │  connection.inProcessHandler()   (no socket, no WS) │
 │  Client Context: connection + Typert Remote + client runtime │
 │        │  pending-interaction carrier (questions, approvals) │
-│  Terminal renderer (Ink) — in development                    │
+│  Terminal renderer (Ink)                                      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,8 +29,8 @@ Because the terminal consumes the shared TypeScript client core, capability pari
 | In-process carrier: generation-owned event streams, abort contract, generic channel routing, webServer optional | ✅ Shipped — 28 adversarial regression tests, proven against the real DeepSeek API |
 | Dual-context terminal runtime (`packages/tui/runtime`): zero-socket boot, reconnect across host recomposition, ask-user and approval through the pending carrier | ✅ Shipped |
 | Node ESM publication of the client core (`./client-node` companions) | ✅ Shipped |
-| Terminal renderer (Ink): scrollback commit plus bounded live region | 🚧 Next |
-| `tui` profile out of the box (`dsh --profile tui`) | 🚧 Next |
+| Terminal renderer (Ink): scrollback commit plus bounded live region | ✅ Shipped |
+| `tui` profile out of the box (`dsh --profile tui`) | ✅ Shipped |
 | `/history` pager, client-runtime tail rebase, long-session performance gate | 🗺 Roadmap |
 
 The design record lives in the [terminal-application Agent Note](.agents/notes/proposed/feature/2026-08-15-official-terminal-application.md).
@@ -53,6 +53,10 @@ pnpm exec vitest run --config vitest.e2e.config.ts packages/tui/runtime/tests/re
 ## Run
 
 The full harness runs exactly as upstream ships it. See the [Web UI guide](docs/user/guide/index.md).
+
+```sh
+pnpm dsh --profile tui               # the terminal application, in-process over the shared client core
+```
 
 ### Run from source
 

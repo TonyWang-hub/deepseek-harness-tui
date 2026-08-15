@@ -812,6 +812,34 @@
       "ignoreDependencies": [
         "@deepseek-ai/.+"
       ]
+    },
+    "packages/bundle/tui-app": {
+      // The pty-smoke fixture (spawned as a subprocess by path string, not a
+      // static import) is run directly, not imported, so it is declared as
+      // an entry — the same reason `packages/tui/runtime`'s own fixture is.
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/fixtures/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        // Every row below is resolved by the Loader from its package NAME in
+        // cordis.patch.yml, never a static import — the same reason
+        // dsh-code-runtime-worker-thread is ignored for dsh-headless above.
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-code-runtime-worker-thread",
+        "@deepseek-ai/dsh-host-apiproxy",
+        "@deepseek-ai/dsh-host-directory-picker-browse",
+        "@deepseek-ai/dsh-storage",
+        "@deepseek-ai/dsh-storage-domain",
+        "@deepseek-ai/dsh-storage-json",
+        "@deepseek-ai/dsh-tool-ask-user",
+        "@deepseek-ai/dsh-tui-runtime",
+        "@deepseek-ai/dsh-workspace"
+      ]
     }
   }
 }

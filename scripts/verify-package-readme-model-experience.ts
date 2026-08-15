@@ -35,6 +35,7 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   'packages/util/home-paths': 'The package only resolves harness-owned host paths; model-facing consumers own any rendered use.',
   'packages/util/launch-environment': 'The package only resolves host environment values; model-facing consumers own any rendered use.',
   'packages/tui/runtime': 'The package only bootstraps a second in-process Client cordis Context over an existing Connection transport; it registers no prompt, tool schema, or model-visible text of its own.',
+  'packages/tui/ink-ui': 'The package only renders session output to a terminal and answers pending interactions through the existing client carrier; it registers no prompt, tool schema, or model-visible text of its own.',
 }
 
 /**
@@ -111,6 +112,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/host/plugin-inventory': { kind: 'none', reason: 'Host-side read-only Loader projection; registers nothing model-facing.' },
   'packages/bundle/base': { kind: 'indirect', reason: 'The bundle is a patch-list carrier; each inserted row\'s package owns its model-facing behavior.' },
   'packages/bundle/headless': { kind: 'none', reason: 'The one-shot runner submits the task as an ordinary user message; prompts and tools belong to the composed base and headless bundles.' },
+  'packages/bundle/tui-app': { kind: 'none', reason: 'This bundle mounts no additional model-visible prompt section or tool of its own; the composed base bundle and the terminal renderer own the model-facing surface.' },
   'packages/llm/llm': { kind: 'none', reason: 'The adapter registry forwards already-assembled requests unchanged.' },
   'packages/llm/token-meter': { kind: 'indirect', reason: 'The measurement service leaves model-visible changes to its consumers.' },
   'packages/lsp/lsp': { kind: 'indirect', reason: 'The provider registry delegates model rendering to dsh-tool-lsp.' },

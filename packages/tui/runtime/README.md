@@ -37,7 +37,8 @@ A later renderer package reads `clientCtx`'s services directly (`ctx.sessions`, 
 
 ## Config
 
-None. This package has no deployment-varying tunable of its own; it wires an existing Config surface (Connection's, Runtime's) unchanged.
+- `render` (default `true`) — mount the terminal renderer over the bootstrapped Client tree once ready, gated on a real TTY `stdout` (a piped/CI process or a test harness has no terminal to render into, so this plugin silently skips mounting rather than treating `render` as unset).
+- `resumeSessionId` (optional) — an existing session id to open instead of creating a fresh one (`dsh --profile tui --resume <sessionId>`). Passed to `mountTuiRenderer`'s `MountOptions.sessionId` unchanged, branded at that single point; `mountTuiRenderer`'s own MVP limitation still applies — nodes already in the session at mount time are the committed baseline and are never replayed into scrollback.
 
 ## Known Limitations and Deferred Work
 
