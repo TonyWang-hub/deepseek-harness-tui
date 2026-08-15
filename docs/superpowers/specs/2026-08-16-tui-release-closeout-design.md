@@ -1,5 +1,7 @@
 # TUI release closeout design
 
+English | [中文](2026-08-16-tui-release-closeout-design.zh.md)
+
 ## Scope
 
 This change closes the documentation and CI maintenance work after the TUI renderer release, then audits the repository for a patch release. It does not create or move a Git tag, publish packages, implement `/history`, or change terminal behavior.
