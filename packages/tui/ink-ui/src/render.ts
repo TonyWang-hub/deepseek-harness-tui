@@ -244,8 +244,10 @@ export async function mountTuiRenderer(clientCtx: Context, options: MountOptions
   // non-interactive Ink writes only the final frame at unmount, which would
   // blank the live region for a real terminal session that merely has a CI
   // environment variable set (and for the test streams, whose fake TTYs are
-  // exactly the surface under test).
-  renderOptions.interactive = Boolean((options.stdout ?? process.stdout).isTTY)
+  // exactly the surface under test). A non-TTY stdout leaves `isTTY`
+  // undefined at runtime, handing the decision back to Ink's own detection,
+  // which is already non-interactive without a TTY.
+  renderOptions.interactive = (options.stdout ?? process.stdout).isTTY
   const instance = inkRender(currentElement(), renderOptions)
 
   let disposed = false
