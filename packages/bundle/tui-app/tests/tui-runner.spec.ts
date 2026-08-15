@@ -25,6 +25,8 @@ describe('tui-runner', () => {
     await ctx.fiber.dispose()
   })
 
+
+
   it('fails loud without a mounted renderer (no real TTY)', async () => {
     const ctx = new Context()
     let err = ''

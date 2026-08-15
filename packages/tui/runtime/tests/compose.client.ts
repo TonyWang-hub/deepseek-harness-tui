@@ -216,7 +216,7 @@ export async function bootHostTree(
       { id: 'tool-ask-user', name: '@deepseek-ai/dsh-tool-ask-user' },
       { id: 'api-gateway', name: '@deepseek-ai/dsh-host-apiproxy' },
       { id: 'connection', name: '@deepseek-ai/dsh-client-connection', config: { trustedHosts: [] } },
-      { id: 'tui-runtime', name: '@deepseek-ai/dsh-tui-runtime', inject: ['connection'] },
+      { id: 'tui-runtime', name: '@deepseek-ai/dsh-tui-runtime', inject: ['connection', 'apiProxy'] },
       // Mounted as an ordinary Loader row (by name), never a static import of
       // @deepseek-ai/dsh-llm-replay — same Host-merge-free reasoning as above.
       ...options.llmReplay === undefined ? [] : [{

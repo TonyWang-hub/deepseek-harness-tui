@@ -2800,7 +2800,7 @@ export type ToolPresentationMode = 'native' | 'code' | 'both'
 
 ## `@deepseek-ai/dsh-tui-runtime`
 
-需要：`connection`
+需要：`connection` · `apiProxy`
 
 ```ts config-catalog
 /** Public plugin configuration. */

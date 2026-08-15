@@ -10,7 +10,7 @@
 
 ## 它挂载了什么
 
-给定 `ctx.connection`（`@deepseek-ai/dsh-client-connection` 的 Host 半区，提供 `inProcessHandler()`），`apply()`：
+给定对 `ctx.connection`（`@deepseek-ai/dsh-client-connection` 的 Host 半区，提供 `inProcessHandler()`）和 `ctx.apiProxy` 的硬依赖，`apply()`：
 
 1. 新建一个 Client `Context`。
 2. 在其上 provide `clientConnectionInProcessTransport`——取自 `ctx.connection.inProcessHandler().fetch` 的 `{ fetch }`。

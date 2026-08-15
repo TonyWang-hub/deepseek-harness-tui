@@ -10,7 +10,7 @@ Dual-context bootstrap for the terminal application: mounts an in-process Client
 
 ## What it mounts
 
-Given `ctx.connection` (the Host half of `@deepseek-ai/dsh-client-connection`, providing `inProcessHandler()`), `apply()`:
+Given hard dependencies on `ctx.connection` (the Host half of `@deepseek-ai/dsh-client-connection`, providing `inProcessHandler()`) and `ctx.apiProxy`, `apply()`:
 
 1. Builds a fresh Client `Context`.
 2. Provides `clientConnectionInProcessTransport` on it — `{ fetch }` from `ctx.connection.inProcessHandler().fetch`.

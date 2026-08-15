@@ -90,8 +90,8 @@ export type { MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
 /** Stable Cordis plugin name. */
 export const name = 'tui-runtime'
 
-/** Hard dependency: the Host tree's Connection service (its in-process transport). */
-export const inject = ['connection']
+/** Hard dependencies: the Host Connection transport and the API it serves in-process. */
+export const inject = ['connection', 'apiProxy']
 
 /** Public plugin configuration. */
 export interface Config {
@@ -164,7 +164,8 @@ declare module '@deepseek-ai/cordis' {
  * independently. If the Host row instead disposes while one of the mount
  * awaits below is still settling, this function disposes the Client tree
  * itself before returning (see the `INACTIVE_EFFECT` handling inline).
- * @param ctx - Host plugin context; `inject` guarantees `ctx.connection` already exists.
+ * The Client tree exists only while both Host dependencies are active.
+ * @param ctx - Host plugin context; `inject` guarantees `ctx.connection` and `ctx.apiProxy` already exist.
  * @param config - resolved plugin configuration (see {@link Config}).
  */
 export async function apply(ctx: HostContext, config: Config): Promise<void> {

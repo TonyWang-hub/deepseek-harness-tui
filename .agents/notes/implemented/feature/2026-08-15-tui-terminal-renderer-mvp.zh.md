@@ -18,7 +18,7 @@ Status: implemented
 
 工具卡（`transcript/tool-cards.ts`）覆盖了来自 `@deepseek-ai/dsh-tools/presentation` 的 `generic`（文档化的兜底形态，含 `read`/`search`/`web`——留待后续）、`terminal`（`sanitizeTerminalOutput` 剥离 OSC/DCS/光标控制序列，保留 SGR）与 `diff`（用 `diff` 包的 `diffLines`，是"精确改动行比对"而非整块替换）三种卡片。
 
-`packages/tui/runtime` 的 `Config.render`（默认 `true`）在 Client 树就绪后挂载渲染器，以真实 TTY `stdout` 为门槛；其生命周期折叠进拥有该 Client 树的同一个插件 fiber，先于该树被释放。
+`packages/tui/runtime` 将 Host Connection 与 ApiProxy 声明为硬注入，确保渲染器不会在进程内 API 就绪前发起初始会话 RPC。其 `Config.render`（默认 `true`）在 Client 树就绪后挂载渲染器，以真实 TTY `stdout` 为门槛；其生命周期折叠进拥有该 Client 树的同一个插件 fiber，先于该树被释放。
 
 ### 在这一确切的 Ink/React 版本组合下，`React.memo` 与 `useInput` 不兼容
 
@@ -26,7 +26,7 @@ Status: implemented
 
 ### `mountTuiRenderer` 会等待会话出现在 `sessions.list` 中
 
-`ISessions.open()` 在会话 id 尚未出现在客户端会话列表中时会抛出 `unknown session`，而该列表是由一个 `host/session-added` 事件异步populate的，该事件与 `session.create` RPC 响应经由同一连接到达，但两者到达时刻不同步。因此 `mountTuiRenderer` 在打开一个刚创建或调用方指定的会话之前会等待（`waitForSessionListed`，以经过校验的 `sessionListTimeoutMs` 为界，默认 5000）。这修复了一个由直接的进程内单元测试暴露出的真实竞态（一个手搭的 `ctx.plugin({apply, inject}, {render: true})` fixture，以及真实的 `bootHostTree` 驱动的 Loader 组合两者都命中过这个竞态——真实 Loader 场景还额外竞态了 API 网关自身的路由注册，本次修复未处理，见 Consequences）。
+`ISessions.open()` 在会话 id 尚未出现在客户端会话列表中时会抛出 `unknown session`，而该列表由一个 `host/session-added` 事件异步填充；该事件与 `session.create` RPC 响应经由同一连接到达，但两者到达时刻不同步。因此 `mountTuiRenderer` 在打开一个刚创建或调用方指定的会话之前会等待（`waitForSessionListed`，以经过校验的 `sessionListTimeoutMs` 为界，默认 5000）。Host runtime 还通过硬注入分别等待 Connection 与 ApiProxy，确保 `session.create` 不会在进程内 API 路由存在前运行。
 
 ## Alternatives considered
 
@@ -40,6 +40,6 @@ Status: implemented
 
 这个终端渲染器是真实可用的代码，并有一个通过的 pty 驱动冒烟测试（`packages/tui/runtime/tests/pty-smoke.client.spec.ts`）：启动、输入 prompt、流式渲染、scrollback 中含有最终文本、Ctrl-C 恢复终端（用真实的 `stty -a` 验证，即 Q3 的手法）。`packages/tui/ink-ui/src` 与 `packages/tui/runtime/src` 两侧的逐文件覆盖率（含分支）均为 100%。
 
-本次工作中发现了一个真实的启动顺序隐患：在进程内驱动完整的 `bootHostTree` Loader 组合（而非经由真实 pty 更慢的模块加载时序）时，`tui-runtime` 自身的 `apply()`——它现在会在自己的挂载过程中执行一次真实的 `session.create` RPC——可能与 `api-gateway` 的路由注册产生竞态，表现为 `transport failure ... HTTP 404`。pty 冒烟测试真实且更慢的进程时序不会触发它；一次未随本次改动交付的、直接进程内 Loader 驱动的单元测试尝试则稳定复现了它。本次未修复此问题——它先于本次改动就已存在（此前没有任何一行在自己的 `apply()` 中同步执行真实 RPC，因此从未被触发过），修复它超出 D2.2 的范围。后续某一刀应当要么让 `tui-runtime` 显式依赖 `api-gateway` 路由就绪，要么让 `mountTuiRenderer` 的会话创建能够容忍一次瞬时传输失败并重试。
+Host 启动关系是显式的：`tui-runtime` 仅在 Connection 与 ApiProxy 均处于激活状态时存在，并在两项依赖就绪后挂载 Client 树与渲染器。初始挂载时缺少 `session.create` 路由属于组合顺序错误，而不是瞬时传输状态；渲染器不会重试 HTTP 404 响应。若 ApiProxy 随后撤销，Cordis 会释放 TUI Client 树；正式 runner 将渲染器释放视为终端应用退出，而不会把普通新启动静默切换到另一个空白会话。
 
 留给后续刀的已知延后工作：`read`/`search`/`web` 工具结果卡仍走通用兜底形态；`/history` 分页器与 client-runtime tail rebase 尚未构建（挂载时已存在的节点是已提交基线，永不重放——`--resume <sessionId>` 打开一个既有会话但不回填它之前的记录，见 [D2.3 Agent Note](2026-08-15-tui-app-bundle-composition.md)）；多段式 `ask_user_question` 只有第一个子问题可应答，没有 `options`（自由文本）的问题只显示一行提示而不接受输入；Shift+Enter 在 kitty 键盘协议之外用字面 `\n` 字节（Ctrl+J）代替。`packages/bundle/tui-app` 的正式 `dsh --profile tui` 组合（D2.3）已经在本渲染器之上出厂；本次这一刀自带的开发运行脚本（`packages/tui/runtime/tests/dev-run.manual.ts`）仍是一种可以直接练习渲染器本身的无密钥方式。

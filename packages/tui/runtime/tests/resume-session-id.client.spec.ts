@@ -44,6 +44,7 @@ describe('tui-runtime apply(): Config.resumeSessionId passthrough', () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
+    ctx.provide('apiProxy', {})
     const fiber = ctx.plugin({ apply, inject }, { render: true, resumeSessionId: 'session-to-resume' })
     await fiber.await()
     try {
@@ -60,6 +61,7 @@ describe('tui-runtime apply(): Config.resumeSessionId passthrough', () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
+    ctx.provide('apiProxy', {})
     const fiber = ctx.plugin({ apply, inject }, { render: true })
     await fiber.await()
     try {

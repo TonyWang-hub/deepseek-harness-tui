@@ -23,7 +23,7 @@ import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   boot, healProfilesModuleFallback, loadProfile, PROFILE_TEMPLATES,
 } from '@deepseek-ai/dsh-app-boot'
@@ -42,6 +42,13 @@ async function main(): Promise<void> {
   const harnessHome = join(workspaceCwd, '.dsh-home')
   const persistenceRoot = join(workspaceCwd, '.dsh-sessions')
   const storageRoot = join(workspaceCwd, '.dsh-storages')
+  const apiGatewayDelayPath = join(workspaceCwd, 'api-gateway-delay.mjs')
+  await writeFile(apiGatewayDelayPath, `
+export async function apply(ctx) {
+  await new Promise(resolve => setTimeout(resolve, 250))
+  ctx.provide('apiGatewayDelay', {})
+}
+`)
   process.env.DSH_HOME = harnessHome
 
   const originalCwd = process.cwd()
@@ -70,6 +77,11 @@ async function main(): Promise<void> {
     { id: 'storage-json', config: { root: storageRoot } },
     { id: 'settings', config: { dshHome: harnessHome } },
     { id: 'credentials', config: { dshHome: harnessHome } },
+    // Force the real ApiProxy to activate after Connection. The shipped
+    // tui-runtime dependency must keep the renderer's first session.create
+    // behind this gate instead of relying on sibling import timing.
+    { insert: [{ id: 'api-gateway-delay', name: pathToFileURL(apiGatewayDelayPath).href }] },
+    { id: 'api-gateway', inject: ['apiGatewayDelay'] },
     // The scripted route below serves every model call; the shipped live
     // adapter is never mounted.
     { id: 'llm-deepseek', disabled: true },

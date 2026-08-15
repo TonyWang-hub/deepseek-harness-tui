@@ -39,15 +39,46 @@ describe('tui-runtime apply()', () => {
     vi.restoreAllMocks()
   })
 
-  it('exposes the stable plugin identity', () => {
+  it('declares the Connection and ApiProxy dependencies', () => {
     expect(name).toBe('tui-runtime')
-    expect(inject).toEqual(['connection'])
+    expect(inject).toEqual(['connection', 'apiProxy'])
+  })
+
+  it('does not boot the Client tree before the Host ApiProxy is initially ready', async () => {
+    const ctx = new Context()
+    let markRequest!: () => void
+    const firstRequest = new Promise<void>((resolve) => { markRequest = resolve })
+    const hostConnection: HostConnectionLike = {
+      inProcessHandler: () => ({
+        fetch: () => {
+          markRequest()
+          return Promise.resolve(new Response('not found', { status: 404 }))
+        },
+      }),
+    }
+    ctx.provide('connection', hostConnection)
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
+    const requestedBeforeApiProxy = await Promise.race([
+      firstRequest.then(() => true),
+      new Promise<false>(resolve => setTimeout(() => { resolve(false) }, 100)),
+    ])
+    expect(requestedBeforeApiProxy).toBe(false)
+
+    ctx.provide('apiProxy', {})
+    await fiber.await()
+    try {
+      await firstRequest
+      expect(ctx.get('tuiRuntime')).toBeDefined()
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('boots the Client tree over the injected HostConnectionLike and provides ctx.tuiRuntime', async () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
+    ctx.provide('apiProxy', {})
     // `render: false`: these fixtures build a bare Host `Context` with no
     // real terminal/session tree behind it, so mounting a real Ink renderer
     // would be meaningless (and `process.stdout.isTTY` is false under
@@ -70,6 +101,7 @@ describe('tui-runtime apply()', () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
+    ctx.provide('apiProxy', {})
     // `render: false`: these fixtures build a bare Host `Context` with no
     // real terminal/session tree behind it, so mounting a real Ink renderer
     // would be meaningless (and `process.stdout.isTTY` is false under
@@ -95,6 +127,7 @@ describe('tui-runtime apply()', () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
+    ctx.provide('apiProxy', {})
     const fiber = ctx.plugin({ apply, inject }, { render: true })
     await expect(fiber.await()).rejects.toThrow('session.create')
     expect(ctx.get('tuiRuntime')).toBeUndefined()

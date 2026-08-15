@@ -11,7 +11,8 @@
 #
 # The tui-startup plugin injects `cmdlineArgs` and provides `tuiStartup` as an
 # ordinary Cordis service; the tui-runtime row injects that service so Loader
-# resolves its `resumeSessionId` expression only after it exists.
+# resolves its `resumeSessionId` expression only after it exists. The same row
+# waits for Connection and ApiProxy before the renderer can issue session RPC.
 # `dsh --profile tui --help` provides neither service, so no renderer mounts.
 
 - id: system-prompt
@@ -91,7 +92,7 @@
     # in-process transport and, under a real TTY, the terminal renderer.
     - id: tui-runtime
       name: '@deepseek-ai/dsh-tui-runtime'
-      inject: [connection, tuiStartup]
+      inject: [connection, apiProxy, tuiStartup]
       config:
         resumeSessionId: !!js ctx.tuiStartup.resumeSessionId
 

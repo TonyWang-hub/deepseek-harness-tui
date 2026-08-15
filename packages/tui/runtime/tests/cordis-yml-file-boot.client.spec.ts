@@ -125,7 +125,7 @@ function tuiAppPatchYaml(): string {
         trustedHosts: []
     - id: tui-runtime
       name: '@deepseek-ai/dsh-tui-runtime'
-      inject: [connection]
+      inject: [connection, apiProxy]
     - id: llm-replay
       name: '@deepseek-ai/dsh-llm-replay'
       config:

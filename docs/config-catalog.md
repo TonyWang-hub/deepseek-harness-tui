@@ -2798,7 +2798,7 @@ Source: [`packages/core/tools/src/index.ts:654`](../packages/core/tools/src/inde
 
 ## `@deepseek-ai/dsh-tui-runtime`
 
-Requires: `connection`
+Requires: `connection` · `apiProxy`
 
 ```ts config-catalog
 /** Public plugin configuration. */

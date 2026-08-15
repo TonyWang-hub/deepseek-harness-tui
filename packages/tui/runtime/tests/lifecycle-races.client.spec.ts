@@ -92,6 +92,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
+    ctx.provide('apiProxy', {})
     const fiber = ctx.plugin({ apply, inject }, { render: false })
     await fiber.await()
 
@@ -108,6 +109,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
+    ctx.provide('apiProxy', {})
     const fiber = ctx.plugin({ apply, inject }, { render: false })
     await fiber.await()
     await fiber.dispose()
@@ -120,14 +122,18 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     expect(ctx.get('tuiRuntime')).toBeUndefined()
   }, 20_000)
 
-  it('disposes the Client tree even when the row never finished loading', async () => {
+  it('settles when disposed before the initial ApiProxy activation', async () => {
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
     const fiber = ctx.plugin({ apply, inject }, { render: false })
-    // No `await fiber.await()`: tear the row down while its load is still
-    // pending. Whether apply() ever ran, nothing may be left running after.
+    const settled = fiber.await().then(() => 'settled' as const, () => 'rejected' as const)
+    await new Promise<void>(resolve => setImmediate(resolve))
     await fiber.dispose()
+    expect(await Promise.race([
+      settled,
+      new Promise<'timeout'>(resolve => setTimeout(() => { resolve('timeout') }, 500)),
+    ])).toBe('settled')
     expect(await trafficAfter(calls, 1_500)).toBe(0)
     expect(ctx.get('tuiRuntime')).toBeUndefined()
   }, 20_000)
@@ -139,6 +145,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
+    ctx.provide('apiProxy', {})
 
     for (let cycle = 0; cycle < 5; cycle += 1) {
       const fiber = ctx.plugin({ apply, inject }, { render: false })
@@ -163,6 +170,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
+    ctx.provide('apiProxy', {})
     const fiber = ctx.plugin({ apply, inject }, { render: false })
     let rejected = false
     const settled = fiber.await().catch(() => { rejected = true })
@@ -191,6 +199,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
+    ctx.provide('apiProxy', {})
 
     armRuntimeMountDelay = true
     const fiber = ctx.plugin({ apply, inject }, { render: false })
@@ -230,6 +239,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
+    ctx.provide('apiProxy', {})
 
     const unexpected = new Error('effect registration exploded for an unrelated reason')
     // Captured before vi.spyOn() below replaces Fiber.prototype.effect; re-bound
