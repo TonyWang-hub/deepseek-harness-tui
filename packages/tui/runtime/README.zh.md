@@ -27,17 +27,7 @@
 
 ## `ctx.tuiRuntime`
 
-```ts
-import type { Context } from '@deepseek-ai/cordis'
-import type { MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
-
-interface TuiRuntimeHandle {
-  readonly clientCtx: Context
-  readonly renderer?: MountedTuiRenderer
-}
-```
-
-已交付的渲染器直接读取 `clientCtx` 的服务；`renderer` 标识在 TTY 上挂载的渲染器，在 headless 或非 TTY 组合中不存在。
+`TuiRuntimeHandle` 以 `clientCtx` 暴露已引导的 Client `Context`，并以 `renderer` 暴露可选的 `MountedTuiRenderer`。已交付的渲染器直接读取 `clientCtx` 的服务；`renderer` 在 headless 或非 TTY 组合中不存在。准确的 TypeScript 声明由 [`src/index.ts`](src/index.ts) 中的源接口维护。
 
 ## 配置
 

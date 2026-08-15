@@ -27,17 +27,7 @@ This package never imports a Host-half package root (`@deepseek-ai/dsh-host-apip
 
 ## `ctx.tuiRuntime`
 
-```ts
-import type { Context } from '@deepseek-ai/cordis'
-import type { MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
-
-interface TuiRuntimeHandle {
-  readonly clientCtx: Context
-  readonly renderer?: MountedTuiRenderer
-}
-```
-
-The shipped renderer reads `clientCtx` services directly; `renderer` identifies the TTY-mounted renderer and is absent for headless or non-TTY compositions.
+`TuiRuntimeHandle` exposes the bootstrapped Client `Context` as `clientCtx` and the optional `MountedTuiRenderer` as `renderer`. The shipped renderer reads `clientCtx` services directly; `renderer` is absent for headless or non-TTY compositions. The source interface in [`src/index.ts`](src/index.ts) owns the exact TypeScript declaration.
 
 ## Config
 
