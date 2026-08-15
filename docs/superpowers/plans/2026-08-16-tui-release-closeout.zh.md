@@ -172,7 +172,7 @@ gh release view v0.1.0 --json tagName,name,isDraft,isPrerelease,publishedAt,url,
 
 - [ ] **步骤 3：在最终报告中记录发布结论**
 
-报告产品 `v0.1.1` 必须指向两笔收尾提交或其后的提交，并且需要人工发布权限。另行说明本次工作没有准备 npm 发布：224 个 dsh 发布成员共享 `0.1.0-rc.5`，发布验证会拒绝 private 包，手动 npm workflow 使用 `dsh-v*` tag。
+报告产品 `v0.1.1` 必须指向两笔收尾提交或其后的提交，并且需要人工发布权限。另行说明本次工作没有准备 npm 发布：224 个 dsh 发布成员仍为 `0.1.0-rc.5`，不存在 `dsh-v*` tag，而且本 fork 的手动 release workflow 没有 publish 输入，因此 publish job 仍被禁用。
 
 ### 任务 4：运行收尾验证
 

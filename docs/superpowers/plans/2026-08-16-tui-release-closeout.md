@@ -172,7 +172,7 @@ Expected: `v0.1.0` is a GitHub product release. Do not run `pnpm release:dsh`: t
 
 - [ ] **Step 3: Record the release conclusion for the final report**
 
-Report that a product `v0.1.1` must point at or after the two closeout commits and requires human release authority. State separately that npm publication is not prepared by this work: all 224 dsh release members share `0.1.0-rc.5`, publish verification rejects private packages, and the manual npm workflow uses `dsh-v*` tags.
+Report that a product `v0.1.1` must point at or after the two closeout commits and requires human release authority. State separately that npm publication is not prepared by this work: all 224 dsh release members remain at `0.1.0-rc.5`, no `dsh-v*` tag exists, and this fork's manual release workflow has no publish input, so its publish job remains disabled.
 
 ### Task 4: Run closeout verification
 

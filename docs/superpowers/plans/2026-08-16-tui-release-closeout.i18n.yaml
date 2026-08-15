@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/superpowers/plans/2026-08-16-tui-release-closeout.md
-2026-08-16-tui-release-closeout.md: 3d02a9c536ef7d110387ed3391b015b70948b15d
-2026-08-16-tui-release-closeout.zh.md: f5b461cc885e340f00641e3116bb15bdc3d07b8e
+2026-08-16-tui-release-closeout.md: 46252a0dc6ca4148829f7a801a17072d7012008b
+2026-08-16-tui-release-closeout.zh.md: 24eb07e3e2c4420b88eaacf41b2631aebc438595
