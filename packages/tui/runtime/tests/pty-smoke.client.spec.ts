@@ -30,6 +30,7 @@ const FIXTURE = fileURLToPath(new URL('./fixtures/pty-smoke-app.ts', import.meta
 const COLS = 80
 const ROWS = 24
 const FINAL_ANSWER_TEXT = 'PTY smoke: the scripted turn streamed and committed to scrollback.'
+const BUNDLED_ANSWER_TEXT = 'PTY smoke: the bundled-write turn streamed and committed to scrollback.'
 const READY_MARKER = '___READY___'
 const DISPOSED_MARKER = '___SMOKE_DISPOSED___'
 const EXIT_MARKER_PREFIX = '___EXITCODE_'
@@ -74,7 +75,11 @@ describe('pty smoke: mountTuiRenderer end to end over a real pty', () => {
   it('streams a scripted turn to scrollback and restores the terminal on Ctrl-C', async () => {
     overrideDir = await mkdtemp(join(tmpdir(), 'dsh-tui-pty-smoke-'))
     const overrideFile = join(overrideDir, 'replay.override.json')
-    await writeFile(overrideFile, JSON.stringify([textEntry(FINAL_ANSWER_TEXT)]))
+    // Two scripted replies, consumed in call order by the SAME session: the
+    // first serves the split-write turn below, the second serves the
+    // bundled-write regression turn — one real Loader boot for both, rather
+    // than paying a second full boot's cost for a second pty test.
+    await writeFile(overrideFile, JSON.stringify([textEntry(FINAL_ANSWER_TEXT), textEntry(BUNDLED_ANSWER_TEXT)]))
 
     const shell = pty.spawn('/bin/bash', ['--norc', '--noprofile'], {
       name: 'xterm-256color',
@@ -92,7 +97,7 @@ describe('pty smoke: mountTuiRenderer end to end over a real pty', () => {
     const command = `${process.execPath} --import tsx/esm ${FIXTURE} ${overrideFile}; echo ${EXIT_MARKER_PREFIX}$?___\n`
     shell.write(command)
 
-    await waitUntil(() => raw, buffer => buffer.includes(READY_MARKER), 20_000)
+    await waitUntil(() => raw, buffer => buffer.includes(READY_MARKER), 40_000)
     await delay(500) // let the first Ink frame (the empty composer) settle before typing
 
     shell.write('hello there')
@@ -101,6 +106,37 @@ describe('pty smoke: mountTuiRenderer end to end over a real pty', () => {
 
     await waitUntil(() => raw, buffer => buffer.includes(FINAL_ANSWER_TEXT), 15_000)
     const rawAtTurnEnd = raw
+
+    // REGRESSION for the "text stuck in the composer, zero response" product
+    // bug: a real deterministic repro (`. .env && node /tmp/tui-demo.mjs`
+    // against the real DeepSeek API) sent the prompt and its trailing Enter
+    // as ONE `node-pty` `write()` call — unlike the turn just above, which
+    // deliberately writes the text and `\r` as TWO SEPARATE `shell.write()`
+    // calls with a delay between them. That split means every pty smoke run
+    // before this addition always handed Ink a lone, unmerged `\r` — the one
+    // case Ink's own `parseKeypress` recognizes as `key.return` — and never
+    // exercised the merged-event path a real fast burst or a scripted/pasted
+    // send produces.
+    //
+    // Root cause (fixed in `@deepseek-ai/dsh-tui-ink-ui`'s
+    // `input/edit-model.ts`): Ink's input parser (`ink/build/input-parser.js`)
+    // only splits a raw stdin chunk on escape sequences and backspace bytes;
+    // a plain run with an embedded or trailing `\r` reaches `useInput`'s
+    // handler as ONE event with `key.return` unset, and the composer used to
+    // insert that whole run — Enter byte included — as literal text instead
+    // of submitting. `foldKeypressEvent` now walks a merged run
+    // character-by-character so a `\r` inside it still submits.
+    await delay(200)
+    shell.write('bundled prompt\r') // text and Enter in ONE write, no delay between them
+    await waitUntil(() => raw, buffer => buffer.includes(BUNDLED_ANSWER_TEXT), 15_000)
+    const rawAfterBundledTurn = raw
+    expect(rawAfterBundledTurn).toContain(BUNDLED_ANSWER_TEXT)
+    // The submitted prompt text itself must not still be sitting in the
+    // composer row below the streamed answer (the bug's exact symptom).
+    const composerRowAfterBundledTurn = rawAfterBundledTurn.slice(
+      rawAfterBundledTurn.lastIndexOf(BUNDLED_ANSWER_TEXT) + BUNDLED_ANSWER_TEXT.length,
+    )
+    expect(composerRowAfterBundledTurn).not.toContain('bundled prompt')
 
     await delay(150)
     shell.write('\x03') // Ctrl-C: Ink's own exitOnCtrlC path
@@ -138,5 +174,5 @@ describe('pty smoke: mountTuiRenderer end to end over a real pty', () => {
     expect(exitCodeMatch?.[1]).toBe('0')
     expect(readSttyFlag(sttyOutput, 'icanon')).toBe(true)
     expect(readSttyFlag(sttyOutput, 'echo')).toBe(true)
-  }, 60_000)
+  }, 90_000)
 })

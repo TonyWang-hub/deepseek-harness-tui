@@ -12,6 +12,11 @@
  * protocol reports it distinctly, and a literal `\n` byte (Ctrl+J) is the
  * documented stand-in everywhere else — no terminal reliably reports
  * Shift+Enter without that protocol (see `input/edit-model.ts`'s module doc).
+ * Every `useInput` event — including one where Ink merged pasted/bulk text
+ * together with a trailing or embedded Enter byte into a single `input`
+ * string — is folded through `foldKeypressEvent` (`input/edit-model.ts`),
+ * which submits/breaks lines at each control byte in the batch rather than
+ * only recognizing a lone, unmerged `\r` (see that function's doc).
  *
  * Deliberately NOT wrapped in `React.memo`: verified against this package's
  * exact Ink 7.1.1/React 19.2.8 pin, `useInput`'s handler (`ink/build/hooks/use-input.js`,
@@ -32,9 +37,7 @@
 import React, { useReducer } from 'react'
 import { Box, Text, useCursor, useInput, useStdout } from 'ink'
 import stringWidth from 'string-width'
-import {
-  composerReducer, composerText, EMPTY_COMPOSER_STATE, isComposerBlank, mapKeyToAction,
-} from '../input/edit-model.ts'
+import { composerReducer, EMPTY_COMPOSER_STATE, foldKeypressEvent } from '../input/edit-model.ts'
 import { layoutMultilineInput, type PrefixWidths } from '../input/layout.ts'
 
 /** First-line prefix, per the D2.2 brief. */
@@ -74,15 +77,9 @@ export function Composer({ onSubmit, isActive = true }: ComposerProps): React.JS
   const columns = stdout.columns > 0 ? stdout.columns : FALLBACK_COLUMNS
 
   useInput((input, key) => {
-    const action = mapKeyToAction(input, key)
-    if (action === null) return
-    if (action === 'submit') {
-      if (isComposerBlank(state)) return
-      onSubmit(composerText(state))
-      dispatch({ type: 'clear' })
-      return
-    }
-    dispatch(action)
+    const { state: nextState, submissions } = foldKeypressEvent(state, input, key)
+    for (const text of submissions) onSubmit(text)
+    if (nextState !== state) dispatch({ type: 'replaceState', state: nextState })
   }, { isActive })
 
   const layout = layoutMultilineInput(state.lines, state.caret, columns, PREFIX_WIDTHS)

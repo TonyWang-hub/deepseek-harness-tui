@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Key } from 'ink'
 import {
-  composerReducer, composerText, EMPTY_COMPOSER_STATE, isComposerBlank, mapKeyToAction, type ComposerState,
+  composerReducer, composerText, EMPTY_COMPOSER_STATE, foldKeypressEvent, isComposerBlank, type ComposerState,
 } from '../../src/input/edit-model.ts'
 
 /** A fully-false Key, overridden per test. */
@@ -115,6 +115,12 @@ describe('composerReducer', () => {
     const state: ComposerState = { lines: ['abc'], caret: { row: 0, col: 3 } }
     expect(composerReducer(state, { type: 'clear' })).toEqual(EMPTY_COMPOSER_STATE)
   })
+
+  it('replaceState: adopts the given state verbatim', () => {
+    const state: ComposerState = { lines: ['abc'], caret: { row: 0, col: 3 } }
+    const replacement: ComposerState = { lines: ['xyz', 'w'], caret: { row: 1, col: 1 } }
+    expect(composerReducer(state, { type: 'replaceState', state: replacement })).toEqual(replacement)
+  })
 })
 
 describe('isComposerBlank / composerText', () => {
@@ -135,55 +141,137 @@ describe('isComposerBlank / composerText', () => {
   })
 })
 
-describe('mapKeyToAction', () => {
-  it('Escape returns null (handled by the caller, not the composer)', () => {
-    expect(mapKeyToAction('', key({ escape: true }))).toBeNull()
+describe('foldKeypressEvent', () => {
+  it('Escape leaves the state unchanged and submits nothing (handled by the caller, not the composer)', () => {
+    const state: ComposerState = { lines: ['abc'], caret: { row: 0, col: 3 } }
+    expect(foldKeypressEvent(state, '', key({ escape: true }))).toEqual({ state, submissions: [] })
   })
 
-  it('Enter without Shift returns submit', () => {
-    expect(mapKeyToAction('', key({ return: true }))).toBe('submit')
+  it('Enter without Shift submits non-blank content and clears the state', () => {
+    const state: ComposerState = { lines: ['hi'], caret: { row: 0, col: 2 } }
+    expect(foldKeypressEvent(state, '', key({ return: true }))).toEqual({
+      state: EMPTY_COMPOSER_STATE,
+      submissions: ['hi'],
+    })
   })
 
-  it('Shift+Enter returns a newline action (kitty-keyboard path)', () => {
-    expect(mapKeyToAction('', key({ return: true, shift: true }))).toEqual({ type: 'newline' })
+  it('Enter on a blank composer is a no-op (no submission)', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, '', key({ return: true }))).toEqual({
+      state: EMPTY_COMPOSER_STATE,
+      submissions: [],
+    })
   })
 
-  it('a literal \\n byte (Ctrl+J stand-in) returns a newline action', () => {
-    expect(mapKeyToAction('\n', key())).toEqual({ type: 'newline' })
+  it('Shift+Enter inserts a newline action (kitty-keyboard path) rather than submitting', () => {
+    const state: ComposerState = { lines: ['hi'], caret: { row: 0, col: 2 } }
+    expect(foldKeypressEvent(state, '', key({ return: true, shift: true }))).toEqual({
+      state: composerReducer(state, { type: 'newline' }),
+      submissions: [],
+    })
   })
 
-  it('Backspace returns a backspace action', () => {
-    expect(mapKeyToAction('', key({ backspace: true }))).toEqual({ type: 'backspace' })
+  it('a literal \\n byte (Ctrl+J stand-in) inserts a newline without submitting', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, '\n', key())).toEqual({
+      state: composerReducer(EMPTY_COMPOSER_STATE, { type: 'newline' }),
+      submissions: [],
+    })
   })
 
-  it('Delete returns a backspace action (Q2-proven convention)', () => {
-    expect(mapKeyToAction('', key({ delete: true }))).toEqual({ type: 'backspace' })
+  it('Backspace applies a backspace transition', () => {
+    const state: ComposerState = { lines: ['hi'], caret: { row: 0, col: 2 } }
+    expect(foldKeypressEvent(state, '', key({ backspace: true }))).toEqual({
+      state: composerReducer(state, { type: 'backspace' }),
+      submissions: [],
+    })
   })
 
-  it('arrow keys map to their directional actions', () => {
-    expect(mapKeyToAction('', key({ leftArrow: true }))).toEqual({ type: 'left' })
-    expect(mapKeyToAction('', key({ rightArrow: true }))).toEqual({ type: 'right' })
-    expect(mapKeyToAction('', key({ upArrow: true }))).toEqual({ type: 'up' })
-    expect(mapKeyToAction('', key({ downArrow: true }))).toEqual({ type: 'down' })
+  it('Delete applies a backspace transition (Q2-proven convention)', () => {
+    const state: ComposerState = { lines: ['hi'], caret: { row: 0, col: 2 } }
+    expect(foldKeypressEvent(state, '', key({ delete: true }))).toEqual({
+      state: composerReducer(state, { type: 'backspace' }),
+      submissions: [],
+    })
   })
 
-  it('a Ctrl-combo (e.g. Ctrl-C) returns null rather than inserting the character', () => {
-    expect(mapKeyToAction('c', key({ ctrl: true }))).toBeNull()
+  it('arrow keys apply their directional transitions', () => {
+    const state: ComposerState = { lines: ['hi'], caret: { row: 0, col: 1 } }
+    expect(foldKeypressEvent(state, '', key({ leftArrow: true }))).toEqual({ state: composerReducer(state, { type: 'left' }), submissions: [] })
+    expect(foldKeypressEvent(state, '', key({ rightArrow: true }))).toEqual({ state: composerReducer(state, { type: 'right' }), submissions: [] })
+    expect(foldKeypressEvent(state, '', key({ upArrow: true }))).toEqual({ state: composerReducer(state, { type: 'up' }), submissions: [] })
+    expect(foldKeypressEvent(state, '', key({ downArrow: true }))).toEqual({ state: composerReducer(state, { type: 'down' }), submissions: [] })
   })
 
-  it('a Meta-combo returns null', () => {
-    expect(mapKeyToAction('x', key({ meta: true }))).toBeNull()
+  it('a Ctrl-combo (e.g. Ctrl-C) leaves the state unchanged rather than inserting the character', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'c', key({ ctrl: true }))).toEqual({ state: EMPTY_COMPOSER_STATE, submissions: [] })
   })
 
-  it('empty input returns null', () => {
-    expect(mapKeyToAction('', key())).toBeNull()
+  it('a Meta-combo leaves the state unchanged', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'x', key({ meta: true }))).toEqual({ state: EMPTY_COMPOSER_STATE, submissions: [] })
   })
 
-  it('an ordinary printable character returns an insert action', () => {
-    expect(mapKeyToAction('a', key())).toEqual({ type: 'insert', text: 'a' })
+  it('empty input leaves the state unchanged', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, '', key())).toEqual({ state: EMPTY_COMPOSER_STATE, submissions: [] })
   })
 
-  it('a pasted multi-character string returns one insert action carrying the whole string', () => {
-    expect(mapKeyToAction('hello', key())).toEqual({ type: 'insert', text: 'hello' })
+  it('an ordinary printable character inserts it', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'a', key())).toEqual({
+      state: composerReducer(EMPTY_COMPOSER_STATE, { type: 'insert', text: 'a' }),
+      submissions: [],
+    })
+  })
+
+  it('a pasted multi-character string with no control bytes is one insert carrying the whole string', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'hello', key())).toEqual({
+      state: composerReducer(EMPTY_COMPOSER_STATE, { type: 'insert', text: 'hello' }),
+      submissions: [],
+    })
+  })
+
+  it('REGRESSION: text with a trailing bare CR merged into one input event still submits (the bundled-write bug)', () => {
+    // Reproduces what Ink actually delivers when a driver, a paste, or a fast
+    // keystroke burst puts "type text, press Enter" into a single stdin
+    // chunk: `useInput` invokes its handler ONCE with the whole run as
+    // `input`, and `key.return` is never set (only a lone unmerged `\r`
+    // sets it) — see `foldKeypressEvent`'s doc. Before this fix, this exact
+    // event inserted the string `'hello\r'` verbatim and never submitted.
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'hello\r', key())).toEqual({
+      state: EMPTY_COMPOSER_STATE,
+      submissions: ['hello'],
+    })
+  })
+
+  it('REGRESSION: CJK text with a trailing bare CR merged into one input event still submits', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, '请原样输出四个字的暗号：芝麻开门\r', key())).toEqual({
+      state: EMPTY_COMPOSER_STATE,
+      submissions: ['请原样输出四个字的暗号：芝麻开门'],
+    })
+  })
+
+  it('a bare CR in the middle of a merged run submits, then continues typing into a fresh composer', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'first\rsecond', key())).toEqual({
+      state: composerReducer(EMPTY_COMPOSER_STATE, { type: 'insert', text: 'second' }),
+      submissions: ['first'],
+    })
+  })
+
+  it('a CR immediately followed by LF in a merged run is one newline, not a submit (pasted CRLF line endings)', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'a\r\nb', key())).toEqual({
+      state: { lines: ['a', 'b'], caret: { row: 1, col: 1 } },
+      submissions: [],
+    })
+  })
+
+  it('a bare LF (not part of a CRLF pair) inside a merged run inserts a newline, not a submit', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, 'ab\ncd', key())).toEqual({
+      state: { lines: ['ab', 'cd'], caret: { row: 1, col: 2 } },
+      submissions: [],
+    })
+  })
+
+  it('a bare CR at the very start of a merged run (blank composer) is a no-op, then the rest is typed', () => {
+    expect(foldKeypressEvent(EMPTY_COMPOSER_STATE, '\rhi', key())).toEqual({
+      state: composerReducer(EMPTY_COMPOSER_STATE, { type: 'insert', text: 'hi' }),
+      submissions: [],
+    })
   })
 })

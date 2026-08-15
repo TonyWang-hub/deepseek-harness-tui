@@ -55,6 +55,27 @@ describe('Composer', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('REGRESSION: text and Enter delivered in ONE stdin write still submit and clear the composer', async () => {
+    // A real pty (node-pty) or a paste delivers "type text, press Enter" as a
+    // single `write()`/`read()` when nothing throttles it — a single Ink
+    // `useInput` event with the whole run (including the trailing `\r`) as
+    // `input`. Before the `foldKeypressEvent` fix, Ink's `key.return` never
+    // fires for a merged run like this (only a LONE unmerged `\r` sets it),
+    // so the entire string — Enter included — was inserted as literal text
+    // and nothing ever submitted: the exact "text stuck in the composer,
+    // zero response" product bug this test guards against. Every other test
+    // in this file (deliberately, matching this package's own pty-smoke
+    // test) writes the text and `\r` as two SEPARATE `stdin.write()` calls,
+    // which never exercised this merged-event path.
+    const onSubmit = vi.fn()
+    const instance = render(<Composer onSubmit={onSubmit} />)
+    instance.stdin.write('hello\r')
+    await delay(60)
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('hello')
+    expect(instance.lastFrame()).toContain('❯')
+    expect(instance.lastFrame()).not.toContain('hello')
+  })
+
   it('backspace deletes the last character', async () => {
     const instance = render(<Composer onSubmit={() => {}} />)
     instance.stdin.write('ab')
