@@ -27,6 +27,15 @@
     // subpaths directly (see its own module doc) — a Client aggregate file
     // despite the `.e2e.ts` suffix the naming convention above does not cover.
     "packages/tui/runtime/tests/real-model-smoke.e2e.ts",
+    // Manual dev-run driver (`*.manual.ts`, not `*.spec.ts` — vitest never
+    // runs it; see its own module doc): still gets static type-checking here
+    // like every other Client-aggregate test file.
+    "packages/tui/runtime/tests/dev-run.manual.ts",
+    // Real-pty smoke fixture: spawned as a subprocess by
+    // `pty-smoke.client.spec.ts` (`node --import tsx/esm`, not imported), so
+    // the `*.client.ts` glob above does not reach it; still gets static
+    // type-checking here like every other Client-aggregate test file.
+    "packages/tui/runtime/tests/fixtures/pty-smoke-app.ts",
     // Reconnaissance-spike PoC scripts and their fixtures (`*.poc.ts` /
     // `tests/fixtures/*.tsx`, not `*.spec.ts` — vitest never runs them, see
     // the package README) still get static type-checking here like every
@@ -75,11 +84,11 @@
     // the Typert registry, and the Typert Remote through their /client-node
     // Node ESM companions.
     { "path": "./packages/tui/runtime" },
-    // Ink/React 19 dependency island (reconnaissance spike; see its own
-    // README) — no renderer, input component, or live region yet, so this
-    // reference exists only for its `src/index.ts` and `src/invariant.ts`
-    // boilerplate. The pty-driven PoC scripts under its `tests/` are
-    // deliberately outside every tsc project reference (see its README).
+    // Ink/React 19 renderer: transcript/tool-card rendering, the bounded
+    // activity region, the multiline composer, and `mountTuiRenderer`. The
+    // pty-driven PoC scripts under its `tests/` are deliberately outside
+    // every tsc project reference (see its README); their fixtures are
+    // covered through the explicit include globs above instead.
     { "path": "./packages/tui/ink-ui" },
     { "path": "./packages/extensions/cordis-client-runner" },
     { "path": "./packages/extensions/ui-cordis" },

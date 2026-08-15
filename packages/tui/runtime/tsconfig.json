@@ -2,7 +2,10 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    // `apply()` gates the renderer mount on `process.stdout.isTTY` — ambient
+    // Node types locally, like `dsh-tui-ink-ui`'s own tsconfig.
+    "types": ["node"]
   },
   "include": [
     "src"
@@ -31,6 +34,12 @@
     },
     {
       "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../ink-ui"
     }
   ]
 }

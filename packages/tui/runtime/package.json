@@ -37,7 +37,9 @@
     "@deepseek-ai/dsh-client-runtime": "workspace:^",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
     "@deepseek-ai/dsh-commands": "workspace:^",
-    "@deepseek-ai/dsh-typert-registry": "workspace:^"
+    "@deepseek-ai/dsh-tui-ink-ui": "workspace:^",
+    "@deepseek-ai/dsh-typert-registry": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-invariants": "workspace:^",
@@ -49,6 +51,7 @@
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@types/js-yaml": "^4.0.9",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.2.0",
+    "node-pty": "^1.1.0"
   }
 }

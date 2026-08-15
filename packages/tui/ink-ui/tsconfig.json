@@ -2,7 +2,12 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "lib/types"
+    "outDir": "lib/types",
+    // This package renders to a real terminal process (NodeJS.WriteStream/
+    // ReadStream, process.stdout) — unlike the browser-facing Client
+    // aggregate default, it needs ambient Node types locally (mirrors
+    // packages/client/hmr's own override for the same reason).
+    "types": ["node"]
   },
   "include": [
     "src"
@@ -10,6 +15,24 @@
   "references": [
     {
       "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../client/connection/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/runtime"
+    },
+    {
+      "path": "../../core/tools"
+    },
+    {
+      "path": "../../llm/llm"
     }
   ]
 }

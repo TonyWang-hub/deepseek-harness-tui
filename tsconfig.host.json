@@ -105,6 +105,15 @@
     // subpaths directly (see its own module doc) — a Client aggregate file
     // despite the `.e2e.ts` suffix the naming convention above does not cover.
     "packages/tui/runtime/tests/real-model-smoke.e2e.ts",
+    // Manual dev-run driver and the pty-smoke fixture: both import
+    // `compose.client.ts` and Client-half package subpaths directly, despite
+    // neither's suffix (`.manual.ts`, plain `.ts`) matching the naming
+    // convention above — the whole `dsh-tui-ink-ui` package is Client-only
+    // (see its own `tsconfig.json`), and every one of its `tests/**` files
+    // reaches Client-aggregate imports the same way.
+    "packages/tui/runtime/tests/dev-run.manual.ts",
+    "packages/tui/runtime/tests/fixtures/**",
+    "packages/tui/ink-ui/tests/**",
     "packages/client/tsdown.client.ts",
     "scripts/client-bundle-css.spec.ts",
     "packages/typert/generator/tests/fixtures/**",

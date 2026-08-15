@@ -10,7 +10,8 @@
  * This file imports `../src/index.ts` directly so the function body itself
  * is covered.
  */
-import { describe, expect, it } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { apply, inject, name } from '../src/index.ts'
@@ -21,7 +22,23 @@ function fetchStub(): { fetch: typeof fetch } {
   return { fetch: () => Promise.resolve(new Response('not found', { status: 404 })) }
 }
 
+/**
+ * A minimal fake TTY `process.stdout`, for exercising `Config.render`'s
+ * `process.stdout.isTTY` gate without a real terminal. Declares `fd: 1`:
+ * `vi.spyOn(process, 'stdout', 'get')` targets `NodeJS.WriteStream & { fd: 1 }`,
+ * `process.stdout`'s exact type, under `exactOptionalPropertyTypes`.
+ */
+function fakeTtyStdout(): NodeJS.WriteStream & { fd: 1 } {
+  const emitter = new EventEmitter() as unknown as NodeJS.WriteStream & { fd: 1 }
+  Object.assign(emitter, { columns: 80, rows: 24, isTTY: true, fd: 1, write: () => true })
+  return emitter
+}
+
 describe('tui-runtime apply()', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('exposes the stable plugin identity', () => {
     expect(name).toBe('tui-runtime')
     expect(inject).toEqual(['connection'])
@@ -31,7 +48,12 @@ describe('tui-runtime apply()', () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
-    const fiber = ctx.plugin({ apply, inject })
+    // `render: false`: these fixtures build a bare Host `Context` with no
+    // real terminal/session tree behind it, so mounting a real Ink renderer
+    // would be meaningless (and `process.stdout.isTTY` is false under
+    // vitest anyway, which alone would skip it — passed explicitly here so
+    // this test's intent does not depend on that environmental fact).
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
     await fiber.await()
     try {
       const handle = ctx.get('tuiRuntime')
@@ -48,12 +70,33 @@ describe('tui-runtime apply()', () => {
     const ctx = new Context()
     const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
     ctx.provide('connection', hostConnection)
-    const fiber = ctx.plugin({ apply, inject })
+    // `render: false`: these fixtures build a bare Host `Context` with no
+    // real terminal/session tree behind it, so mounting a real Ink renderer
+    // would be meaningless (and `process.stdout.isTTY` is false under
+    // vitest anyway, which alone would skip it — passed explicitly here so
+    // this test's intent does not depend on that environmental fact).
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
     await fiber.await()
     const handle = ctx.get('tuiRuntime')
     if (handle === undefined) throw new Error('ctx.tuiRuntime was not provided')
     const clientCtx = handle.clientCtx
     await fiber.dispose()
     expect(clientCtx.get('connection')).toBeUndefined()
+  })
+
+  it('attempts the renderer mount when config.render is true and process.stdout is a TTY, and cleans up if it fails', async () => {
+    // This fixture's `fetchStub()` answers every request 404 (including
+    // `session.create`), so `mountTuiRenderer` itself fails here — this
+    // test's own scope is `config.render && process.stdout.isTTY` selecting
+    // the mount attempt and apply()'s own cleanup on a failed mount, not a
+    // successful end-to-end render (`pty-smoke.client.spec.ts` in this same
+    // package proves that with a real host tree and a real pty).
+    vi.spyOn(process, 'stdout', 'get').mockReturnValue(fakeTtyStdout())
+    const ctx = new Context()
+    const hostConnection: HostConnectionLike = { inProcessHandler: () => fetchStub() }
+    ctx.provide('connection', hostConnection)
+    const fiber = ctx.plugin({ apply, inject }, { render: true })
+    await expect(fiber.await()).rejects.toThrow('session.create')
+    expect(ctx.get('tuiRuntime')).toBeUndefined()
   })
 })

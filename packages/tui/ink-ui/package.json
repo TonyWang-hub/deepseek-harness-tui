@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tui-ink-ui",
-  "description": "Terminal application renderer spike: the Ink/React 19 dependency island and its scrollback-commit, multiline-input, and terminal-restoration reconnaissance",
+  "description": "Terminal application renderer: transcript/tool-card rendering, the bounded activity region, the multiline composer, and mountTuiRenderer, over Ink/React 19",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
@@ -32,8 +32,16 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-client-runtime": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/schemastery": "workspace:^",
+    "chalk": "^5.6.2",
+    "diff": "^9.0.0",
     "ink": "^7.1.1",
-    "react": "^19.2.8"
+    "react": "^19.2.8",
+    "string-width": "^8.2.2"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-invariants": "workspace:^",
@@ -44,7 +52,7 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@types/react": "^19.2.8",
     "@xterm/headless": "^6.0.0",
-    "node-pty": "^1.1.0",
-    "string-width": "^8.2.2"
+    "ink-testing-library": "^4.0.0",
+    "node-pty": "^1.1.0"
   }
 }

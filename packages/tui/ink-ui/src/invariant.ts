@@ -14,11 +14,14 @@ export const name = 'tui-ink-ui-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: this cut ships no Cordis plugin, service, or mutable
- * cross-plugin state — only the package boundary, its Ink/React dependency
- * island, and reconnaissance PoC scripts under `tests/`. A future renderer
- * cut states its own owned relationships (the live-region tree, the
- * publication scheduler) here once they exist.
+ * No runtime invariant: `mountTuiRenderer` is a plain function over a
+ * `Context` a caller already owns (`ctx.tuiRuntime.clientCtx`, mounted by
+ * `@deepseek-ai/dsh-tui-runtime`) — it registers no Cordis plugin, service,
+ * or mutable cross-plugin state of its own. Its owned relationships (the
+ * publication scheduler, the row cache, the scrollback commit watermark) are
+ * private closure state scoped to one `mountTuiRenderer()` call, torn down by
+ * its own returned `dispose()`/`waitUntilExit()` lifecycle — not state a
+ * package-wide invariant would check.
  */
 const install: InvariantInstaller = () => {}
 

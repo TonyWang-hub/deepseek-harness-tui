@@ -53,7 +53,8 @@ vi.mock(import('@deepseek-ai/dsh-client-runtime/client-node'), async (importOrig
     // cordis's Plugin.Function accepts a `void | Promise<void>` apply, so an
     // async wrapper over a `void`-returning real `apply` is a normal plugin
     // shape (see `export async function apply` elsewhere in this repo) —
-    // just one oxlint cannot confirm from this factory's structural return type.
+    // just one the analyzer cannot confirm from this factory's structural return type.
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- see the comment above
     apply: async (...args: Parameters<typeof actual.apply>) => {
       if (armRuntimeMountDelay) {
         armRuntimeMountDelay = false
@@ -69,7 +70,8 @@ function countingHostConnection(calls: string[]): HostConnectionLike {
   return {
     inProcessHandler: () => ({
       fetch: (input: RequestInfo | URL) => {
-        calls.push(String(input))
+        const url = input instanceof URL ? input.href : typeof input === 'string' ? input : input.url
+        calls.push(url)
         // 404 keeps the Client tree in its reconnect loop, which is the state
         // that actually generates traffic to measure.
         return Promise.resolve(new Response('not found', { status: 404 }))
@@ -90,7 +92,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
-    const fiber = ctx.plugin({ apply, inject })
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
     await fiber.await()
 
     // The tree is live: its readiness handshake has already reached the
@@ -106,7 +108,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
-    const fiber = ctx.plugin({ apply, inject })
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
     await fiber.await()
     await fiber.dispose()
     // A second dispose of an already-disposed fiber settles inertly. It returns
@@ -122,7 +124,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
-    const fiber = ctx.plugin({ apply, inject })
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
     // No `await fiber.await()`: tear the row down while its load is still
     // pending. Whether apply() ever ran, nothing may be left running after.
     await fiber.dispose()
@@ -139,7 +141,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     ctx.provide('connection', countingHostConnection(calls))
 
     for (let cycle = 0; cycle < 5; cycle += 1) {
-      const fiber = ctx.plugin({ apply, inject })
+      const fiber = ctx.plugin({ apply, inject }, { render: false })
       await fiber.await()
       expect(ctx.get('tuiRuntime')).toBeDefined()
       await fiber.dispose()
@@ -161,7 +163,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     const calls: string[] = []
     const ctx = new Context()
     ctx.provide('connection', countingHostConnection(calls))
-    const fiber = ctx.plugin({ apply, inject })
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
     let rejected = false
     const settled = fiber.await().catch(() => { rejected = true })
     const disposed = fiber.dispose()
@@ -191,7 +193,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     ctx.provide('connection', countingHostConnection(calls))
 
     armRuntimeMountDelay = true
-    const fiber = ctx.plugin({ apply, inject })
+    const fiber = ctx.plugin({ apply, inject }, { render: false })
 
     // Wait for the mount to actually reach the armed delay and consume it,
     // so disposal below is guaranteed to land mid-await rather than racing a
@@ -230,6 +232,9 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
     ctx.provide('connection', countingHostConnection(calls))
 
     const unexpected = new Error('effect registration exploded for an unrelated reason')
+    // Captured before vi.spyOn() below replaces Fiber.prototype.effect; re-bound
+    // via .call(this, ...) at each use below, never called unbound.
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- see the comment above
     const originalEffect = Fiber.prototype.effect
     const effectSpy = vi.spyOn(Fiber.prototype, 'effect')
       .mockImplementation(function (this: Fiber, execute: () => unknown, label?: string) {
@@ -238,7 +243,7 @@ describe('tui-runtime client tree quiescence after the Host row unloads', () => 
       })
 
     try {
-      const fiber = ctx.plugin({ apply, inject })
+      const fiber = ctx.plugin({ apply, inject }, { render: false })
       await expect(fiber.await()).rejects.toBe(unexpected)
       expect(await trafficAfter(calls, 500)).toBe(0)
       expect(ctx.get('tuiRuntime')).toBeUndefined()

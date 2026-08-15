@@ -38,4 +38,11 @@ export const coverageExemptHeavySuites: readonly CoverageExemptSuite[] = [
   { filter: 'scripts/install-lefthook.spec.ts', exclude: 'scripts/install-lefthook.spec.ts' },
   { filter: 'scripts/oxlint-contract.spec.ts', exclude: 'scripts/oxlint-contract.spec.ts' },
   { filter: 'scripts/change-scope.spec.ts', exclude: 'scripts/change-scope.spec.ts' },
+  // PTY-driven smoke: `mountTuiRenderer` and the whole host tree it drives
+  // run inside a real pty's child process, invisible to v8 coverage either
+  // way; `dsh-tui-ink-ui`'s own unit/component suites and this package's
+  // other real-composition specs already cover every in-process file this
+  // test touches (`compose.client.ts`, a test-only helper outside
+  // `coverage.include`'s `packages/*/*/src` scope).
+  { filter: 'packages/tui/runtime/tests/pty-smoke.client.spec.ts', exclude: 'packages/tui/runtime/tests/pty-smoke.client.spec.ts' },
 ]

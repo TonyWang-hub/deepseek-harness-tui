@@ -244,9 +244,15 @@
       ]
     },
     "packages/tui/runtime": {
+      // The manual dev-run driver (`*.manual.ts`, not `*.spec.ts` — vitest
+      // never runs it) and the pty-smoke fixture (spawned as a child process
+      // by path string, not a static import) are both run directly, not
+      // imported, so both are declared as entries.
       "entry": [
         "tests/**/*.spec.ts",
-        "tests/**/*.e2e.ts"
+        "tests/**/*.e2e.ts",
+        "tests/*.manual.ts",
+        "tests/fixtures/*.ts"
       ],
       "project": [
         "src/**/*.ts",

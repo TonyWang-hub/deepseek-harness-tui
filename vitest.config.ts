@@ -42,6 +42,9 @@ const windowsUnsupportedTests = process.platform === 'win32'
       'packages/subprocess/subprocess-local/tests/process-inspector.spec.ts',
       'packages/subprocess/subprocess-local/tests/spawn.spec.ts',
       'packages/subprocess/subprocess-local/tests/terminal.spec.ts',
+      // Spawns a real `bash` in its own pty (the Q3 reconnaissance pattern,
+      // over `stty -a`), unlike the rest of dsh-tui-runtime's suite.
+      'packages/tui/runtime/tests/pty-smoke.client.spec.ts',
     ]
   : []
 

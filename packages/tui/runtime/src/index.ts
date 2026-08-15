@@ -36,6 +36,15 @@
  * Client half's own `declare module` augmentations are fine; a package
  * root's Host-half augmentation is not).
  *
+ * `Config.render` (default `true`) optionally mounts the terminal renderer
+ * (`@deepseek-ai/dsh-tui-ink-ui`'s `mountTuiRenderer`) over the bootstrapped
+ * Client tree once it is ready, but only under a real TTY `stdout` — a
+ * validated `Config` field, not a hardcoded default, per the "no hardcoded
+ * tunables" rule (a piped/CI process or a test harness has no terminal to
+ * render into, and set-but-unused would be the misleading alternative). The
+ * renderer's own lifecycle is folded into this plugin's fiber, disposed
+ * before the Client tree it renders.
+ *
  * `registerConversationNodes` rides a narrower publication of the same kind:
  * `@deepseek-ai/dsh-client-ui-conversation/conversation-nodes`, a Node ESM
  * companion of ONLY that package's `src/client/conversation-nodes/` subtree
@@ -54,11 +63,13 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import type { Context as HostContext } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import * as connectionClient from '@deepseek-ai/dsh-client-connection/client-node'
 import * as typertRegistryClient from '@deepseek-ai/dsh-typert-registry/client-node'
 import * as remoteClient from '@deepseek-ai/dsh-api-gateway/client-node'
 import * as runtimeClient from '@deepseek-ai/dsh-client-runtime/client-node'
 import { registerConversationNodes } from '@deepseek-ai/dsh-client-ui-conversation/conversation-nodes'
+import { mountTuiRenderer, type MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
 // Generated Typert Remote descriptor (Host-for-Client artifact), not a
 // Client-vs-Host split — a plain generated object with no Cordis Context
 // merge, safe to import directly.
@@ -66,12 +77,30 @@ import commandsRemote from '@deepseek-ai/dsh-commands/remote'
 import type { HostConnectionLike } from './types.ts'
 
 export type { HostConnectionLike } from './types.ts'
+export type { MountedTuiRenderer } from '@deepseek-ai/dsh-tui-ink-ui'
 
 /** Stable Cordis plugin name. */
 export const name = 'tui-runtime'
 
 /** Hard dependency: the Host tree's Connection service (its in-process transport). */
 export const inject = ['connection']
+
+/** Public plugin configuration. */
+export interface Config {
+  /**
+   * Mount the terminal renderer over the bootstrapped Client tree once it is
+   * ready. Takes effect only under a real TTY `stdout`: a piped/CI process
+   * or a test harness has no terminal to render into, so this plugin
+   * silently skips mounting in that case rather than treating `render` as
+   * unset. Default `true`.
+   */
+  render?: boolean
+}
+
+/** Schemastery config exposed by the plugin. */
+export const Config: z<Config> = z.object({
+  render: z.boolean().default(true),
+})
 
 /**
  * The `ctx.tuiRuntime` service: the bootstrapped Client-tree root Context,
@@ -92,6 +121,17 @@ export interface TuiRuntimeHandle {
    * this package cannot yet justify.
    */
   readonly clientCtx: Context
+  /**
+   * The mounted terminal renderer, when `Config.render` held and `process.stdout`
+   * was a real TTY at mount time; `undefined` otherwise (a headless/test
+   * composition, or a non-TTY process). A caller that wants to know when the
+   * terminal application itself exited (Ctrl-C, `useApp().exit()`, or an
+   * uncaught exception unwinding through Ink — see `mountTuiRenderer`'s
+   * `waitUntilExit` doc) awaits `renderer.waitUntilExit()`; the dev-run
+   * driver (`tests/dev-run.manual.ts`) does exactly this to know when to
+   * dispose the rest of the host tree.
+   */
+  readonly renderer?: MountedTuiRenderer
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -110,8 +150,9 @@ declare module '@deepseek-ai/cordis' {
  * awaits below is still settling, this function disposes the Client tree
  * itself before returning (see the `INACTIVE_EFFECT` handling inline).
  * @param ctx - Host plugin context; `inject` guarantees `ctx.connection` already exists.
+ * @param config - resolved plugin configuration (see {@link Config}).
  */
-export async function apply(ctx: HostContext): Promise<void> {
+export async function apply(ctx: HostContext, config: Config): Promise<void> {
   // The hard `inject` above is cordis's own guarantee that `ctx.get('connection')`
   // is already defined by the time apply() runs (the fiber suspends until
   // then) — trusted here rather than re-checked, since `ctx.get` returns
@@ -133,13 +174,35 @@ export async function apply(ctx: HostContext): Promise<void> {
   // mount, is this row's own registration act.
   registerConversationNodes(clientCtx)
 
+  // The renderer mounts only under a real TTY stdout: config.render gates it
+  // explicitly (see the Config JSDoc), and a non-TTY stdout (a piped/CI
+  // process, a test harness) has no terminal to render into — mounting Ink
+  // there would corrupt piped output rather than render anything useful.
+  let renderer: MountedTuiRenderer | undefined
+  try {
+    if (config.render && process.stdout.isTTY) {
+      renderer = await mountTuiRenderer(clientCtx)
+    }
+  } catch (error) {
+    // The renderer mount is the last step before this plugin registers its
+    // own disposal effect below; a failure here would otherwise leave the
+    // Client tree (and the commands Remote mount) with nothing to dispose
+    // them, the same leak the `ctx.effect()` catch below guards against.
+    await disposeCommandsRemote()
+    await clientCtx.fiber.dispose()
+    throw error
+  }
+
   try {
     ctx.effect(() => async () => {
       // Cordis awaits an async disposer during unload (see
       // vendor/cordis/src/fiber.ts's `Disposable` doc), so returning here
       // instead of firing both calls with `void` lets a rejection from
       // either propagate to the unload caller instead of escaping as an
-      // unhandled rejection.
+      // unhandled rejection. The renderer disposes first: it is the Client
+      // tree's own consumer, so its teardown (unmounting Ink, restoring the
+      // terminal) must complete before the tree it reads from goes away.
+      await renderer?.dispose()
       await disposeCommandsRemote()
       await clientCtx.fiber.dispose()
     }, 'tui-runtime: client tree lifecycle')
@@ -150,6 +213,7 @@ export async function apply(ctx: HostContext): Promise<void> {
     // connect/pump/reconnect loop. Tear it down here regardless of why the
     // registration failed, then decide whether the failure itself is
     // expected teardown or a genuine error.
+    await renderer?.dispose()
     await disposeCommandsRemote()
     await clientCtx.fiber.dispose()
     // The Host row's own fiber can start (or finish) unloading during any of
@@ -165,5 +229,5 @@ export async function apply(ctx: HostContext): Promise<void> {
     throw error
   }
 
-  ctx.provide('tuiRuntime', { clientCtx })
+  ctx.provide('tuiRuntime', { clientCtx, renderer })
 }

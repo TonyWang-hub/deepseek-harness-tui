@@ -7829,12 +7829,36 @@ importers:
 
   packages/tui/ink-ui:
     dependencies:
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../../client/connection
+      '@deepseek-ai/dsh-client-runtime':
+        specifier: workspace:^
+        version: link:../../client/runtime
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       ink:
         specifier: ^7.1.1
         version: 7.1.1(@types/react@19.2.18)(react@19.2.8)
       react:
         specifier: ^19.2.8
         version: 19.2.8
+      string-width:
+        specifier: ^8.2.2
+        version: 8.2.2
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -7848,12 +7872,12 @@ importers:
       '@xterm/headless':
         specifier: ^6.0.0
         version: 6.0.0
+      ink-testing-library:
+        specifier: ^4.0.0
+        version: 4.0.0(@types/react@19.2.18)
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0(patch_hash=7a0c04f1f49d798a9ffe2f7f414c01064a44ca2489772d0c3e1235ab336755e6)
-      string-width:
-        specifier: ^8.2.2
-        version: 8.2.2
 
   packages/tui/runtime:
     dependencies:
@@ -7872,9 +7896,15 @@ importers:
       '@deepseek-ai/dsh-commands':
         specifier: workspace:^
         version: link:../../interaction/commands
+      '@deepseek-ai/dsh-tui-ink-ui':
+        specifier: workspace:^
+        version: link:../ink-ui
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:^
         version: link:../../typert/registry
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -7894,6 +7924,9 @@ importers:
       js-yaml:
         specifier: ^4.2.0
         version: 4.2.0
+      node-pty:
+        specifier: ^1.1.0
+        version: 1.1.0(patch_hash=7a0c04f1f49d798a9ffe2f7f414c01064a44ca2489772d0c3e1235ab336755e6)
 
   packages/typert/generator:
     dependencies:
@@ -12637,6 +12670,15 @@ packages:
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+
+  ink-testing-library@4.0.0:
+    resolution: {integrity: sha512-yF92kj3pmBvk7oKbSq5vEALO//o7Z9Ck/OaLNlkzXNeYdwfpxMQkSowGTFUCS5MSu9bWfSZMewGpp7bFc66D7Q==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   ink@7.1.1:
     resolution: {integrity: sha512-Y43xxa1ZSPvpmfLHcN5o+OdP8Rf8ykkNJEuKYOUNZKT8wXVNLFTtEm1nSDMQkfBH+YANF4Xuu0hhZ4ejqAtN2w==}
@@ -18051,6 +18093,10 @@ snapshots:
   indent-string@5.0.0: {}
 
   inherits@2.0.4: {}
+
+  ink-testing-library@4.0.0(@types/react@19.2.18):
+    optionalDependencies:
+      '@types/react': 19.2.18
 
   ink@7.1.1(@types/react@19.2.18)(react@19.2.8):
     dependencies:
